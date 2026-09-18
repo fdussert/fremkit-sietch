@@ -158,6 +158,17 @@ describe('readPackage', () => {
     await expect(readPackage(root, 'demo')).rejects.toThrow(/outside the package/)
   })
 
+  it('says a missing description is missing, not mistyped', async () => {
+    // The schema defaults `description` to `''`, so an absent one is an empty string by the time
+    // it gets here — and "must be a pair" would send an author looking for a type error in
+    // something they never wrote.
+    const { description: _, ...withoutDescription } = manifest({ id: 'demo' })
+    await widget('demo', {}, withoutDescription)
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/description is required/)
+    await widget('demo', {}, manifest({ id: 'demo', description: '' }))
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/description is required/)
+  })
+
   it('requires a { fr, en } pair for every text it shows', async () => {
     // Fremkit accepts a bare string, because manifests were written before the pair existed. A
     // registry has no such history: a widget here is read by French and English dashboards both.
@@ -194,12 +205,14 @@ describe('readPackage', () => {
   it('refuses the channel reserved for the host', async () => {
     // `config` carries the whole dashboard. The schema refuses it; a registry that published a
     // widget asking for it would be publishing something no Fremkit can read.
+    // Matched on the reason, not just on "something threw": every other rule in this file also
+    // throws, so a bare `rejects.toThrow()` would keep passing if the channel guard disappeared.
     for (const subscriptions of [['config'], ['config:*'], ['config:anything']]) {
       await widget('demo', {}, manifest({ id: 'demo', subscriptions }))
-      await expect(readPackage(root, 'demo'), subscriptions[0]).rejects.toThrow()
+      await expect(readPackage(root, 'demo'), subscriptions[0]).rejects.toThrow(/reserved/)
     }
     await widget('demo', {}, manifest({ id: 'demo', commands: ['config'] }))
-    await expect(readPackage(root, 'demo')).rejects.toThrow()
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/reserved/)
   })
 
   it('refuses a folder with no manifest or no index.html', async () => {

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from './build.js'
 import { renderPage } from './page.js'
 import { readAllPackages } from './validate.js'
-import { RegistryIndexSchema, type RegistryIndex } from './schema.js'
+import { DEFAULT_BASE_URL, readPublishedIndex } from './published.js'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const WIDGETS_DIR = join(root, 'widgets')
@@ -28,28 +28,7 @@ const REGISTRY_NAME = 'fremkit-sietch'
  * Fremkit at it with `FREMKIT_DEV=1 FREMKIT_REGISTRY_URL=…`. The index carries absolute URLs, so
  * without this the zips would be advertised on the Pages origin a local `dist/` is not on.
  */
-const BASE_URL = process.env.FREMKIT_REGISTRY_BASE || 'https://fdussert.github.io/fremkit-sietch'
-
-/** The index already on Pages, or null on the very first run — and on any failure to read it. */
-async function previousIndex(): Promise<RegistryIndex | null> {
-  const url = `${BASE_URL.replace(/\/+$/, '')}/index.json`
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) })
-    // A 404 is the first deploy, not a problem.
-    if (res.status === 404) return null
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const parsed = RegistryIndexSchema.safeParse(await res.json())
-    if (!parsed.success) throw new Error('it does not validate against the current schema')
-    return parsed.data
-  } catch (err) {
-    // Deliberately not fatal, and deliberately loud. Without the previous index the build cannot
-    // enforce "a version only goes up" or carry older releases forward, and a run that quietly
-    // did neither would unpublish every rollback without anyone noticing.
-    console.warn(`warning: could not read the published index (${(err as Error).message}).`)
-    console.warn('warning: this run cannot check versions against it or keep older releases downloadable.')
-    return null
-  }
-}
+const BASE_URL = process.env.FREMKIT_REGISTRY_BASE || DEFAULT_BASE_URL
 
 async function fetchPublished(url: string): Promise<Buffer> {
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000) })
@@ -67,7 +46,10 @@ async function main(): Promise<void> {
   const packages = await readAllPackages(WIDGETS_DIR)
   console.log(`${packages.length} widget folder(s) validated`)
 
-  const previous = await previousIndex()
+  // Only a 404 is survivable; see published.ts. Everything the build refuses to do twice rests
+  // on this answer, so "unknown" must fail the run rather than pass as "nothing published yet".
+  const previous = await readPublishedIndex(BASE_URL)
+  if (previous === null) console.log('no index published yet: nothing to check this build against')
   const result = await build(packages, {
     registry: REGISTRY_NAME,
     baseUrl: BASE_URL,

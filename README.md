@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/fdussert/fremkit/main/brand/social/fremkit-social-1280x640.png" alt="Fremkit — widget dashboard for the Corsair Xeneon Edge" width="800"></p>
+
 # Fremkit widgets
 
 The widget registry for [Fremkit](https://github.com/fdussert/fremkit), the widget dashboard

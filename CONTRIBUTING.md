@@ -17,6 +17,26 @@ permission the previous one did not is shown to every user as a new consent.
 Reviews look at what the widget asks for and what it does with remote data (escape it with
 `Fremkit.esc`), not at taste. Security concerns: see [SECURITY.md](SECURITY.md).
 
+## Publishing a theme
+
+A theme is colour tokens and nothing else: no code, no permissions, nothing for a user to
+consent to. It is the easiest thing to publish here and the safest thing to install.
+
+1. Copy `themes/fremkit/theme.json` from the [main
+   repository](https://github.com/fdussert/fremkit) — it mirrors the dashboard's own
+   `tokens.css`, so every token a theme can set is already in it.
+2. Change `id`, `name`, `description` and the values. `id` is the folder name,
+   `[a-z0-9_-]+`; `name` and `description` are `{ "fr": …, "en": … }` pairs; `version` is semver
+   and only ever goes up. `author`, `license` and `homepage` are optional and shown on the card.
+3. Drop it at `themes/<id>/theme.json` here — that folder and at most a `README.md`, nothing
+   else — and run `pnpm validate`.
+
+`fremkit` and `edge` ship with Fremkit so a fresh install has a choice with no network; those
+two ids are refused here.
+
+The four tokens `accent`, `bg`, `surface` and `text` are published in the index, which is what
+the admin paints as a swatch strip — so a theme needs no preview image.
+
 ## Running the checks before you open it
 
 ```bash

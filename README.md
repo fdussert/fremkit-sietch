@@ -24,6 +24,7 @@ version asks for more.
 widgets/<id>/manifest.json   what the widget is, its version, the SDK it needs, its permissions
 widgets/<id>/index.html      the widget
 widgets/<id>/...             any asset it ships (images, fonts, scripts of its own)
+themes/<id>/theme.json       a theme: colour tokens, no code, nothing to consent to
 tools/                       the validator, the packer and the index builder (TypeScript, vitest)
 tools/vendor/                byte-for-byte copies of Fremkit's manifest, zip and address rules
 .github/workflows/           validate.yml on a pull request, publish.yml on main

@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod'
-import { SEMVER_RE } from './vendor/widgets/manifest.js'
+import { SEMVER_RE, WIDGET_CATEGORIES } from './vendor/widgets/manifest.js'
 
 export const INDEX_SCHEMA_VERSION = 1
 
@@ -48,6 +48,15 @@ export const IndexWidgetSchema = z.object({
   name: LocalizedTextSchema,
   description: LocalizedTextSchema,
   icon: z.string().min(1),
+  /**
+   * The shelf of the admin's library this widget sits on, copied from the manifest.
+   *
+   * The list comes from the vendored schema rather than being written again here: a category
+   * Fremkit does not have is not a shelf, and two copies of the list would eventually disagree
+   * about which ones exist. A manifest that names none is published as `other`, which is where
+   * a widget written before categories existed still shows up.
+   */
+  category: z.enum(WIDGET_CATEGORIES).default('other'),
   author: z.string().optional(),
   license: z.string().optional(),
   homepage: z.url({ protocol: /^https$/ }).optional(),

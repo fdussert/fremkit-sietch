@@ -213,6 +213,8 @@ export async function build(packages: BuildInput, opts: BuildOptions): Promise<B
       name: pkg.manifest.name,
       description: pkg.manifest.description,
       icon: pkg.manifest.icon,
+      // Already `other` when the manifest named none: the vendored schema defaults it.
+      category: pkg.manifest.category,
       ...(pkg.manifest.author ? { author: pkg.manifest.author } : {}),
       ...(pkg.manifest.license ? { license: pkg.manifest.license } : {}),
       ...(pkg.manifest.homepage ? { homepage: pkg.manifest.homepage } : {}),

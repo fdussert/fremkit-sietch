@@ -203,7 +203,50 @@ describe('build', () => {
   })
 })
 
+describe('the category an entry carries', () => {
+  it('copies what the manifest names', async () => {
+    const result = await build([pkg({ category: 'home' })], opts)
+    expect(result.index.widgets[0].category).toBe('home')
+  })
+
+  it('publishes `other` for a manifest that names none', async () => {
+    // The vendored schema defaults it, so this is really asserting that the default survives the
+    // trip into the index rather than being dropped as an absent key.
+    const result = await build([pkg()], opts)
+    expect(result.index.widgets[0].category).toBe('other')
+    expect(RegistryIndexSchema.parse(JSON.parse(result.files.get('index.json')!.toString())).widgets[0].category).toBe('other')
+  })
+
+  it('reads an index published before categories existed', () => {
+    // An older `index.json` has no `category` at all; it must parse, not be refused whole.
+    const older = {
+      registry: 'fremkit-sietch', generatedAt: '2026-09-18T12:00:00.000Z', schema: 1,
+      widgets: [{
+        id: 'demo', version: '1.0.0', sdk: 1, name: 'Demo', description: 'D', icon: 'layout-grid',
+        permissions: { subscriptions: [], commands: [], network: [] }, connections: [],
+        size: 10, sha256: 'a'.repeat(64), url: `${BASE}/widgets/demo-1.0.0.zip`,
+        publishedAt: '2026-09-18T12:00:00.000Z', previous: [],
+      }],
+    }
+    expect(RegistryIndexSchema.parse(older).widgets[0].category).toBe('other')
+  })
+})
+
 describe('renderPage', () => {
+  it('shelves the widgets by category, in the library\'s order, skipping the empty ones', async () => {
+    const result = await build([
+      pkg({ id: 'nas', category: 'home' }),
+      pkg({ id: 'runs', category: 'dev' }),
+      pkg({ id: 'plain' }),
+    ], opts)
+    const html = renderPage(result.index)
+    const headings = [...html.matchAll(/<h1 class="section">([^<]+)<\/h1>/g)].map((m) => m[1])
+    // `WIDGET_CATEGORIES` order, not the order the folders were read in, and no empty shelf.
+    expect(headings).toEqual(['Development', 'Home', 'Other', 'Themes'])
+    expect(html.indexOf('runs')).toBeLessThan(html.indexOf('nas'))
+  })
+
+
   it('escapes everything it takes from a manifest', async () => {
     const result = await build([pkg({ name: { en: '<img src=x onerror=alert(1)>' }, author: '"><script>' })], opts)
     const html = renderPage(result.index)

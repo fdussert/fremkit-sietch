@@ -84,6 +84,43 @@ export function isLocalName(host: string): boolean {
 }
 
 /**
+ * Every text a manifest shows a user, with the path to say where it was found.
+ *
+ * The schema accepts a bare string or any record, because Fremkit has to keep reading the
+ * manifests that were written before the `{ fr, en }` pair existed. A registry has no such
+ * history: a widget published here is read by French and English dashboards both, and one that
+ * declares only `fr` leaves half of them with a label they cannot read. So the pair is required
+ * here and nowhere else.
+ */
+export function localizedTexts(manifest: WidgetManifest): { path: string; value: unknown }[] {
+  const texts: { path: string; value: unknown }[] = [
+    { path: 'name', value: manifest.name },
+    { path: 'description', value: manifest.description },
+  ]
+  for (const [key, field] of Object.entries(manifest.settingsSchema)) {
+    texts.push({ path: `settingsSchema.${key}.label`, value: field.label })
+    for (const [itemKey, item] of Object.entries(field.itemSchema ?? {})) {
+      texts.push({ path: `settingsSchema.${key}.itemSchema.${itemKey}.label`, value: item.label })
+      for (const [i, option] of (item.options ?? []).entries()) {
+        if (typeof option === 'object') texts.push({ path: `settingsSchema.${key}.itemSchema.${itemKey}.options[${i}].label`, value: option.label })
+      }
+    }
+    for (const [i, option] of (field.options ?? []).entries()) {
+      if (typeof option === 'object') texts.push({ path: `settingsSchema.${key}.options[${i}].label`, value: option.label })
+    }
+  }
+  return texts
+}
+
+/** A `{ fr, en }` pair with something in both. A bare string is not one. */
+export function isBilingual(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const pair = value as Record<string, unknown>
+  return typeof pair.fr === 'string' && pair.fr.trim() !== ''
+    && typeof pair.en === 'string' && pair.en.trim() !== ''
+}
+
+/**
  * `<script src=` pointing anywhere but at the package itself.
  *
  * The widget CSP is `script-src 'self'`, so the browser would refuse to load it and the widget
@@ -149,6 +186,12 @@ export async function readPackage(root: string, id: string): Promise<WidgetPacka
   // copy ever lags behind, and this is the one rule a widget cannot be published without.
   for (const host of manifest.permissions.network) {
     if (isPrivateLiteral(host) || isLocalName(host)) throw new ValidationError(id, `private or local network host: ${host}`)
+  }
+
+  // `description` defaults to `''` in the schema, so an absent one is a bare string here rather
+  // than a missing key: the message is the same either way.
+  for (const { path, value } of localizedTexts(manifest)) {
+    if (!isBilingual(value)) throw new ValidationError(id, `${path} must be a { "fr": …, "en": … } pair`)
   }
 
   for (const file of files) {

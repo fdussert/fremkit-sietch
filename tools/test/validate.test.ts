@@ -2,14 +2,15 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LIMITS, checkEntryName, isLocalName, offPackageScripts, readAllPackages, readPackage } from '../validate.js'
+import { LIMITS, checkEntryName, isBilingual, isLocalName, localizedTexts, offPackageScripts, readAllPackages, readPackage } from '../validate.js'
+import { ManifestSchema } from '../vendor/widgets/manifest.js'
 
 let root: string
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'registry-')) })
 
 const manifest = (over: Record<string, unknown> = {}) => ({
-  id: 'demo', name: { fr: 'Démo', en: 'Demo' }, version: '1.0.0', sdk: 1,
-  minSize: [8, 4], defaultSize: [8, 4], ...over,
+  id: 'demo', name: { fr: 'Démo', en: 'Demo' }, description: { fr: 'Une démo', en: 'A demo' },
+  version: '1.0.0', sdk: 1, minSize: [8, 4], defaultSize: [8, 4], ...over,
 })
 
 async function widget(id: string, files: Record<string, string | Buffer> = {}, m: unknown = manifest({ id })) {
@@ -59,6 +60,45 @@ describe('offPackageScripts', () => {
     expect(offPackageScripts('<script src="./lib/a.js"></script>')).toEqual([])
     expect(offPackageScripts('<script src="/fremkit.js"></script>')).toEqual([])
     expect(offPackageScripts('<script>var a = 1</script>')).toEqual([])
+  })
+})
+
+describe('isBilingual', () => {
+  it('takes a pair with something in both halves', () => {
+    expect(isBilingual({ fr: 'Démo', en: 'Demo' })).toBe(true)
+  })
+  it('refuses a bare string, a half pair and an empty one', () => {
+    for (const value of ['Demo', { fr: 'Démo' }, { en: 'Demo' }, { fr: '', en: 'Demo' }, { fr: 'Démo', en: '  ' }, {}, null, undefined]) {
+      expect(isBilingual(value), JSON.stringify(value) ?? 'undefined').toBe(false)
+    }
+  })
+})
+
+describe('localizedTexts', () => {
+  it('finds every text a manifest shows, down to an enum option inside a list item', () => {
+    const parsed = ManifestSchema.parse(manifest({
+      settingsSchema: {
+        mode: {
+          type: 'enum', label: { fr: 'Mode', en: 'Mode' },
+          options: [{ value: 'a', label: { fr: 'A', en: 'A' } }, 'b'],
+        },
+        rows: {
+          type: 'list', label: { fr: 'Lignes', en: 'Rows' },
+          itemSchema: {
+            kind: { type: 'enum', label: { fr: 'Type', en: 'Kind' }, options: [{ value: 'x', label: { fr: 'X', en: 'X' } }] },
+          },
+        },
+      },
+    }))
+    expect(localizedTexts(parsed).map((t) => t.path)).toEqual([
+      'name',
+      'description',
+      'settingsSchema.mode.label',
+      'settingsSchema.mode.options[0].label',
+      'settingsSchema.rows.label',
+      'settingsSchema.rows.itemSchema.kind.label',
+      'settingsSchema.rows.itemSchema.kind.options[0].label',
+    ])
   })
 })
 
@@ -116,6 +156,50 @@ describe('readPackage', () => {
     await writeFile(join(root, 'demo', 'manifest.json'), JSON.stringify(manifest({ id: 'demo' })))
     await writeFile(join(root, 'demo', 'index.html'), '<script src="https://cdn.example.com/x.js"></script>')
     await expect(readPackage(root, 'demo')).rejects.toThrow(/outside the package/)
+  })
+
+  it('requires a { fr, en } pair for every text it shows', async () => {
+    // Fremkit accepts a bare string, because manifests were written before the pair existed. A
+    // registry has no such history: a widget here is read by French and English dashboards both.
+    for (const over of [
+      { name: 'Demo' },
+      { name: { fr: 'Démo' } },
+      { description: { en: 'A demo' } },
+      { settingsSchema: { title: { type: 'string', label: 'Title' } } },
+      { settingsSchema: { mode: { type: 'enum', label: { fr: 'M', en: 'M' }, options: [{ value: 'a', label: 'A' }] } } },
+      {
+        settingsSchema: {
+          rows: {
+            type: 'list', label: { fr: 'L', en: 'R' },
+            itemSchema: { kind: { type: 'string', label: { fr: 'T' } } },
+          },
+        },
+      },
+    ]) {
+      await widget('demo', {}, manifest({ id: 'demo', ...over }))
+      await expect(readPackage(root, 'demo'), JSON.stringify(over)).rejects.toThrow(/must be a \{ "fr"/)
+    }
+  })
+
+  it('accepts a manifest whose texts are all pairs', async () => {
+    await widget('demo', {}, manifest({
+      id: 'demo',
+      settingsSchema: {
+        mode: { type: 'enum', label: { fr: 'Mode', en: 'Mode' }, options: [{ value: 'a', label: { fr: 'A', en: 'A' } }] },
+      },
+    }))
+    await expect(readPackage(root, 'demo')).resolves.toBeTruthy()
+  })
+
+  it('refuses the channel reserved for the host', async () => {
+    // `config` carries the whole dashboard. The schema refuses it; a registry that published a
+    // widget asking for it would be publishing something no Fremkit can read.
+    for (const subscriptions of [['config'], ['config:*'], ['config:anything']]) {
+      await widget('demo', {}, manifest({ id: 'demo', subscriptions }))
+      await expect(readPackage(root, 'demo'), subscriptions[0]).rejects.toThrow()
+    }
+    await widget('demo', {}, manifest({ id: 'demo', commands: ['config'] }))
+    await expect(readPackage(root, 'demo')).rejects.toThrow()
   })
 
   it('refuses a folder with no manifest or no index.html', async () => {

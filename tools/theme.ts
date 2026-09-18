@@ -6,17 +6,18 @@
  * holds `theme.json` and at most a `README.md`, it is tiny, its id is its folder's name, and its
  * version only ever goes up.
  *
- * **The tokens are not validated here yet.** Fremkit's `ThemeSchema`/`TokensSchema` — one
- * regular expression per token — is the authority, and it lands with the theme pull request; it
- * will be vendored into `tools/vendor/themes/theme.ts` and this file will parse against it, the
- * way `validate.ts` parses a manifest against the vendored `ManifestSchema`. Until then the four
- * tokens the index needs are read by shape, and `check-vendor` warns rather than fails about the
- * file that does not exist upstream. Everything a theme *cannot* do is already enforced; what is
- * missing is the check that its colours are colours.
+ * **The tokens are Fremkit's rule, not this repository's.** `TokensSchema` is vendored — one
+ * regular expression per token, and a `strictObject`, so an unknown token is a mistake told to
+ * the author rather than a value silently dropped on the way through. It is the same schema the
+ * installer applies to the downloaded package, which is what makes a pull request that passes
+ * here an install that works there.
+ *
+ * The four the index needs are pulled out on top of that, because a theme that paints no accent
+ * has no swatch to show; every other token stays whatever Fremkit accepts.
  */
 
 import { z } from 'zod'
-import { SEMVER_RE } from './vendor/widgets/manifest.js'
+import { ThemeSchema, TokensSchema } from './vendor/themes/theme.js'
 
 /** A theme package is a JSON file. These ceilings exist to be obviously never reached. */
 export const THEME_LIMITS = {
@@ -41,15 +42,11 @@ export const THEME_README = 'README.md'
 export const BUILTIN_THEME_IDS = new Set(['fremkit', 'edge'])
 
 /**
- * A colour as a token holds it.
- *
- * Deliberately loose: the authority is Fremkit's `TokensSchema`, which has one expression per
- * token and is not this repository's to guess at. This only refuses what could not be a CSS
- * colour at all — the four values reach the index and end up in a swatch on a card, so
- * something that is not a colour must not travel that far.
+ * The shape the published page holds a swatch value to before writing it into a `style`
+ * attribute. `TokensSchema` has already refused anything that is not a colour; this is the check
+ * that does not depend on that having run, on the one value that reaches an HTML attribute.
  */
 export const COLOR_RE = /^[#a-zA-Z0-9(),.%\s/-]+$/
-const ColorSchema = z.string().min(1).max(64).regex(COLOR_RE)
 
 /** The four tokens a card paints as a swatch strip, so a theme needs no preview image. */
 export const SWATCH_TOKENS = ['accent', 'bg', 'surface', 'text'] as const
@@ -64,20 +61,26 @@ const LocalizedPairSchema = z.object({ fr: z.string().min(1), en: z.string().min
  * all of them, and a registry that listed only the ones it understood would silently drop the
  * rest on the way through. Only the four the card needs are named.
  */
-export const ThemeFileSchema = z.looseObject({
-  id: z.string().regex(/^[a-z0-9_-]+$/),
-  version: z.string().regex(SEMVER_RE),
+export const ThemeFileSchema = ThemeSchema.extend({
+  /**
+   * Both texts are required pairs here, where Fremkit takes a bare string and no description at
+   * all: an index read in two languages cannot carry a name written in one.
+   */
   name: LocalizedPairSchema,
   description: LocalizedPairSchema,
-  author: z.string().min(1).max(200).optional(),
-  license: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9.+-]{0,63}$/).optional(),
-  homepage: z.url({ protocol: /^https$/ }).optional(),
-  tokens: z.looseObject({
-    accent: ColorSchema,
-    bg: ColorSchema,
-    surface: ColorSchema,
-    text: ColorSchema,
-  }),
+  /**
+   * The four the card paints, made *required* on top of `TokensSchema`, which has them optional
+   * like every other token — a theme that names none has nothing to show in a swatch strip, and
+   * a card with four blanks is worse than no card.
+   *
+   * `.required()` rather than `.extend()`: extending replaces a field, which would have handed
+   * these four a plain string schema and quietly dropped the colour expression `TokensSchema`
+   * holds them to. That is the one thing this file must not do — they are the values the
+   * published page writes into a `style` attribute.
+   */
+  tokens: TokensSchema.required(Object.fromEntries(
+    SWATCH_TOKENS.map((name) => [name, true]),
+  ) as { [K in (typeof SWATCH_TOKENS)[number]]: true }),
 })
 export type ThemeFile = z.infer<typeof ThemeFileSchema>
 

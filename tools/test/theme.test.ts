@@ -94,6 +94,33 @@ describe('readThemePackage', () => {
     await expect(readThemePackage(root, 'nuit')).rejects.toThrow(/invalid theme/)
   })
 
+  it('holds every token to the shape its CSS property accepts, not just the four', async () => {
+    // The whole reason `TokensSchema` is vendored: one expression per token, Fremkit's own, so a
+    // pull request that passes here is an install that works there. Extending the schema to make
+    // the four required had silently replaced their colour expression with a plain string —
+    // which is what this asserts did not happen.
+    const ok = { accent: '#d9b36a', bg: '#0b0d10', surface: '#151a21', text: '#e6e8eb' }
+    for (const tokens of [
+      { ...ok, shadow: '0 0 0 red, url(https://evil.example.net/x)' },
+      { ...ok, font: 'url(https://evil.example.net/f.woff)' },
+      { ...ok, 'radius-sm': '10' },
+      { ...ok, 'text-scale': 99 },
+      { ...ok, nuance: '#fff' },
+    ]) {
+      await folder('nuit', theme({ id: 'nuit', tokens }))
+      await expect(readThemePackage(root, 'nuit'), JSON.stringify(tokens)).rejects.toThrow(/invalid theme/)
+    }
+  })
+
+  it('carries every token Fremkit accepts, not only the four it paints', async () => {
+    await folder('nuit', theme({ id: 'nuit', tokens: {
+      accent: '#d9b36a', bg: '#0b0d10', surface: '#151a21', text: '#e6e8eb',
+      'radius-sm': '10px', shadow: '0 10px 26px rgba(0, 0, 0, .55)', 'text-scale': 1.05,
+    } }))
+    const pkg = await readThemePackage(root, 'nuit')
+    expect(pkg.theme.tokens['text-scale']).toBe(1.05)
+  })
+
   it('applies the shared folder rules: no dotfile, no symlink, no huge file', async () => {
     await folder('nuit', theme({ id: 'nuit' }), { '.DS_Store': 'x' })
     await expect(readThemePackage(root, 'nuit')).rejects.toThrow(/dotfile/)

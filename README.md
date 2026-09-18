@@ -18,6 +18,30 @@ bridge, and only for the channels, commands and network hosts its manifest decla
 admin shows those permissions and asks for consent before installing, and again when a new
 version asks for more.
 
+## Widgets whose provider is in Fremkit
+
+Most of what is published here needs nothing installed but Fremkit itself. A widget is HTML in a
+sandbox; the thing that holds an address, a token or a password is a **provider** or a
+**connection type**, and those stay in the core, where the secret can live in the keychain and
+never reach a page. So a widget that talks to a printer, a hub or an API is published here while
+the code that authenticates is already on the machine.
+
+| Widget | What it shows | Needs |
+|---|---|---|
+| `bambu-job` | The current job of a Bambu Lab printer | a `bambu` connection |
+| `homey-devices` | Homey devices, with a touch to switch or dim one | a `homey` connection |
+| `homey-flows` | Homey flows as buttons | the same `homey` connection |
+| `ado-pipelines` | Azure DevOps pipeline runs, and a touch to start one | an `azure-devops` connection |
+| `github-actions` | Workflow runs of the repositories being watched | a `github` connection |
+| `github-inbox` | Reviews, issues and notifications waiting on GitHub | the same `github` connection |
+| `synology-storage` | Volumes, disk health and temperature of a NAS | a `synology` connection |
+| `synology-system` | CPU, memory, network and uptime of a NAS | the same `synology` connection |
+| `mutedeck` | Microphone, camera and screen sharing of the meeting in progress | nothing — MuteDeck on this Mac |
+| `cleanshot` | Big touch targets for CleanShot X captures | nothing — CleanShot X on this Mac |
+
+A connection is created once in the Fremkit admin, under Connections, and every widget of that
+type reads it. The install dialog names the connection a widget needs before you agree to it.
+
 ## Layout
 
 ```

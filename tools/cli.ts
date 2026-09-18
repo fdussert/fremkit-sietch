@@ -20,7 +20,15 @@ const DIST_DIR = join(root, 'dist')
 
 /** Who this index says it is, and where its files will live. Both are this repository's identity. */
 const REGISTRY_NAME = 'fremkit-sietch'
-const BASE_URL = process.env.REGISTRY_BASE_URL || 'https://fdussert.github.io/fremkit-sietch'
+/**
+ * The origin the published URLs are written against.
+ *
+ * `FREMKIT_REGISTRY_BASE` overrides it so the whole chain can be exercised before anything is
+ * published: build against `http://127.0.0.1:8080`, serve `dist/`, and point a development
+ * Fremkit at it with `FREMKIT_DEV=1 FREMKIT_REGISTRY_URL=…`. The index carries absolute URLs, so
+ * without this the zips would be advertised on the Pages origin a local `dist/` is not on.
+ */
+const BASE_URL = process.env.FREMKIT_REGISTRY_BASE || 'https://fdussert.github.io/fremkit-sietch'
 
 /** The index already on Pages, or null on the very first run — and on any failure to read it. */
 async function previousIndex(): Promise<RegistryIndex | null> {

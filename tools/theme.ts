@@ -48,7 +48,8 @@ export const BUILTIN_THEME_IDS = new Set(['fremkit', 'edge'])
  * colour at all — the four values reach the index and end up in a swatch on a card, so
  * something that is not a colour must not travel that far.
  */
-const ColorSchema = z.string().min(1).max(64).regex(/^[#a-zA-Z0-9(),.%\s/-]+$/)
+export const COLOR_RE = /^[#a-zA-Z0-9(),.%\s/-]+$/
+const ColorSchema = z.string().min(1).max(64).regex(COLOR_RE)
 
 /** The four tokens a card paints as a swatch strip, so a theme needs no preview image. */
 export const SWATCH_TOKENS = ['accent', 'bg', 'surface', 'text'] as const

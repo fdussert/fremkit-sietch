@@ -1,6 +1,9 @@
 { "id": "bambu-job",
-  "name": { "fr": "Impression Bambu", "en": "Bambu print" },
-  "version": "1.0.1",
+  "name": {
+    "fr": "Job Bambu",
+    "en": "Bambu job"
+  },
+  "version": "1.0.2",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Job en cours, progression, filaments de l’AMS et flux vidéo de la chambre", "en": "The current job, its progress, the AMS filaments and the chamber camera feed" },
   "category": "home",

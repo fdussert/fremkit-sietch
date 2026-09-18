@@ -1,6 +1,6 @@
 { "id": "homey-devices",
   "name": { "fr": "Appareils Homey", "en": "Homey devices" },
-  "version": "1.1.0",
+  "version": "1.1.1",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Lampes, prises et capteurs d’un Homey Pro", "en": "Lights, plugs and sensors of a Homey Pro" },
   "category": "home",

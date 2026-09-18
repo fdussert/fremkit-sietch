@@ -1,4 +1,4 @@
-{ "id": "mutedeck", "name": { "fr": "MuteDeck", "en": "MuteDeck" }, "version": "1.1.0",
+{ "id": "mutedeck", "name": { "fr": "MuteDeck", "en": "MuteDeck" }, "version": "1.1.1",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Contrôle réunion", "en": "Meeting controls" },
   "category": "productivity",

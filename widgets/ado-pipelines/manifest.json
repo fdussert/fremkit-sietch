@@ -1,6 +1,6 @@
 { "id": "ado-pipelines",
   "name": { "fr": "Pipelines Azure DevOps", "en": "Azure DevOps pipelines" },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Runs en cours et historique", "en": "Running builds and history" },
   "category": "dev",

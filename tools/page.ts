@@ -7,7 +7,7 @@
  * nothing, but a widget's description is still text from a pull request.
  */
 
-import type { IndexWidget, RegistryIndex } from './schema.js'
+import type { IndexTheme, IndexWidget, RegistryIndex } from './schema.js'
 
 export function esc(value: unknown): string {
   return String(value ?? '')
@@ -41,8 +41,38 @@ function card(w: IndexWidget): string {
     </article>`
 }
 
+/**
+ * A theme's four tokens as a strip of swatches.
+ *
+ * The one place this page puts an author's value into a `style` attribute, so it is escaped like
+ * everything else *and* held to the shape a colour has: anything else is dropped rather than
+ * rendered, because a value that reached `style` unchecked could close the attribute.
+ */
+const COLOR_RE = /^[#a-zA-Z0-9(),.%\s/-]+$/
+
+function swatches(theme: IndexTheme): string {
+  const order: (keyof IndexTheme['tokens'])[] = ['bg', 'surface', 'accent', 'text']
+  return order.map((key) => {
+    const value = theme.tokens[key]
+    if (!COLOR_RE.test(value)) return ''
+    return `<i class="sw" style="background:${esc(value)}" title="${esc(key)}"></i>`
+  }).join('')
+}
+
+function themeCard(t: IndexTheme): string {
+  const meta = [t.author, t.license].filter(Boolean).map((v) => esc(v)).join(' · ')
+  const home = t.homepage ? ` · <a href="${esc(t.homepage)}" rel="noopener noreferrer">homepage</a>` : ''
+  return `    <article>
+      <h2>${esc(text(t.name))} <span class="v">${esc(t.version)}</span></h2>
+      <p class="strip">${swatches(t)}</p>
+      <p>${esc(text(t.description))}</p>
+      <p class="meta">${meta}${home} · <a href="${esc(t.url)}">${esc(t.id)}-${esc(t.version)}.zip</a> (${esc(t.size)} bytes)</p>
+    </article>`
+}
+
 export function renderPage(index: RegistryIndex): string {
   const cards = index.widgets.map(card).join('\n')
+  const themes = index.themes.map(themeCard).join('\n')
   const empty = '    <p class="meta">No widget published yet.</p>'
   return `<!doctype html>
 <html lang="en">
@@ -64,14 +94,20 @@ p { margin: .25rem 0; }
 .perm { color: var(--fg); font-size: .9rem; }
 .meta { color: var(--dim); font-size: .85rem; }
 footer { margin-top: 2rem; color: var(--dim); font-size: .85rem; }
+h1.section { font-size: 1.1rem; margin: 2rem 0 0; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+.strip { display: flex; gap: 4px; margin: .35rem 0 .5rem; }
+.sw { width: 26px; height: 18px; border-radius: 4px; border: 1px solid var(--line); }
 </style>
 </head>
 <body>
   <main>
     <h1>Fremkit widgets</h1>
     <p class="meta">The widget registry for <a href="https://github.com/fdussert/fremkit">Fremkit</a>. Browse and install these from the Fremkit admin; the machine-readable list is <a href="index.json">index.json</a>.</p>
+    <h1 class="section">Widgets</h1>
 ${index.widgets.length ? cards : empty}
-    <footer>Generated ${esc(index.generatedAt)} · schema ${esc(index.schema)} · ${index.widgets.length} widget(s)</footer>
+    <h1 class="section">Themes</h1>
+${index.themes.length ? themes : '    <p class="meta">No theme published yet.</p>'}
+    <footer>Generated ${esc(index.generatedAt)} · schema ${esc(index.schema)} · ${index.widgets.length} widget(s) · ${index.themes.length} theme(s)</footer>
   </main>
 </body>
 </html>

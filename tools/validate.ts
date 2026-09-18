@@ -1,20 +1,32 @@
 /**
- * What a widget folder must be to get into the index.
+ * What a folder must be to get into the index.
  *
  * These rules exist twice on purpose: here, so an author learns at pull-request time, and in
  * Fremkit's installer, so a user is protected whatever a registry — this one, a fork, a
  * compromised Pages deployment — chose to publish. The installer is the one that matters; this
  * is the one that is kind. Neither is allowed to trust the other.
  *
- * Everything below is a property of the *package*, not of the widget's behaviour: nothing here
- * runs a widget, and nothing here can tell whether the code inside does what it says. That is
- * what the human review in CONTRIBUTING is for.
+ * Everything below is a property of the *package*, not of what it does: nothing here runs a
+ * widget, and nothing here can tell whether the code inside does what it says. That is what the
+ * human review in CONTRIBUTING is for.
+ *
+ * Two kinds live here. A **widget** is code, and carries the whole list. A **theme** is a JSON
+ * file of colours: no code, no permissions, nothing to consent to — so its rules are about shape
+ * and size, and they are short. The parts they share — walking a folder, the names an entry may
+ * carry, the ceilings — are shared, and the parts they do not are not.
  */
 
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { ManifestSchema, type WidgetManifest } from './vendor/widgets/manifest.js'
 import { isPrivateLiteral } from './vendor/net/private.js'
+import { BUILTIN_THEME_IDS, THEME_ENTRY, THEME_LIMITS, ThemeFileSchema, type ThemeFile } from './theme.js'
+
+/** What a folder at the repository root holds. The root name *is* the kind. */
+export type Kind = 'widget' | 'theme'
+
+/** Root folder → kind. `validate` and `build` walk both and dispatch on which one they are in. */
+export const ROOTS: Record<string, Kind> = { widgets: 'widget', themes: 'theme' }
 
 /** A package is small: these are ceilings, not budgets, and nothing here is near them. */
 export const LIMITS = {
@@ -30,10 +42,28 @@ export const LIMITS = {
 export interface PackageFile { name: string; data: Buffer }
 
 export interface WidgetPackage {
+  kind: 'widget'
   id: string
+  version: string
   manifest: WidgetManifest
   /** Sorted by name, so the zip built from them is byte-identical from one run to the next. */
   files: PackageFile[]
+}
+
+export interface ThemePackage {
+  kind: 'theme'
+  id: string
+  version: string
+  theme: ThemeFile
+  files: PackageFile[]
+}
+
+/** Either kind, told apart by `kind`. */
+export type Package = WidgetPackage | ThemePackage
+
+/** The ceilings of one kind. A theme is a JSON file; a widget is a page and its assets. */
+export function limitsOf(kind: Kind): { maxFiles: number; maxCompressedBytes: number; maxUncompressedBytes: number; maxFileBytes: number } {
+  return kind === 'theme' ? THEME_LIMITS : LIMITS
 }
 
 export class ValidationError extends Error {
@@ -142,8 +172,13 @@ export function offPackageScripts(html: string): string[] {
   return found
 }
 
-/** Reads one `widgets/<id>/` folder and holds it to every rule above. */
-export async function readPackage(root: string, id: string): Promise<WidgetPackage> {
+/**
+ * Reads a folder into sorted files, holding every entry to the name and size rules of its kind.
+ *
+ * The half both kinds share. What is in the files is the caller's business.
+ */
+export async function readFolder(root: string, id: string, kind: Kind): Promise<PackageFile[]> {
+  const limits = limitsOf(kind)
   const folder = join(root, id)
   const files: PackageFile[] = []
   let total = 0
@@ -159,15 +194,55 @@ export async function readPackage(root: string, id: string): Promise<WidgetPacka
       if (entry.isDirectory()) { await walk(full); continue }
       if (!entry.isFile()) throw new ValidationError(id, `not a regular file: ${name}`)
       const size = (await stat(full)).size
-      if (size > LIMITS.maxFileBytes) throw new ValidationError(id, `file over ${LIMITS.maxFileBytes} bytes: ${name}`)
+      if (size > limits.maxFileBytes) throw new ValidationError(id, `file over ${limits.maxFileBytes} bytes: ${name}`)
       total += size
       files.push({ name, data: await readFile(full) })
     }
   }
   await walk(folder)
 
-  if (files.length > LIMITS.maxFiles) throw new ValidationError(id, `over ${LIMITS.maxFiles} files`)
-  if (total > LIMITS.maxUncompressedBytes) throw new ValidationError(id, `over ${LIMITS.maxUncompressedBytes} bytes unpacked`)
+  if (files.length > limits.maxFiles) throw new ValidationError(id, `over ${limits.maxFiles} files`)
+  if (total > limits.maxUncompressedBytes) throw new ValidationError(id, `over ${limits.maxUncompressedBytes} bytes unpacked`)
+  files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+  return files
+}
+
+/**
+ * Reads one `themes/<id>/` folder.
+ *
+ * Short, because a theme is short: the folder holds `theme.json` and at most a `README.md`, the
+ * file parses, the id is the folder's, and the id is not one Fremkit ships. The tokens
+ * themselves are read by shape until Fremkit's `TokensSchema` is vendored — see theme.ts.
+ */
+export async function readThemePackage(root: string, id: string): Promise<ThemePackage> {
+  const files = await readFolder(root, id, 'theme')
+  const allowed = new Set([THEME_ENTRY, 'README.md'])
+  for (const file of files) {
+    if (!allowed.has(file.name)) throw new ValidationError(id, `a theme folder holds ${THEME_ENTRY} and at most a README.md, not ${file.name}`)
+  }
+  const entry = files.find((f) => f.name === THEME_ENTRY)
+  if (!entry) throw new ValidationError(id, `${THEME_ENTRY} is missing`)
+
+  let json: unknown
+  try { json = JSON.parse(entry.data.toString('utf8')) }
+  catch { throw new ValidationError(id, `${THEME_ENTRY} is not valid JSON`) }
+  const parsed = ThemeFileSchema.safeParse(json)
+  if (!parsed.success) {
+    throw new ValidationError(id, `invalid theme: ` + parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '))
+  }
+  const theme = parsed.data
+  if (theme.id !== id) throw new ValidationError(id, `theme id "${theme.id}" does not match the folder`)
+  // Fremkit ships these two so a fresh install has a choice with no network, and its installer
+  // refuses them; saying so here tells an author before they open a pull request.
+  if (BUILTIN_THEME_IDS.has(id)) throw new ValidationError(id, 'this id belongs to a theme Fremkit ships')
+
+  return { kind: 'theme', id, version: theme.version, theme, files }
+}
+
+/** Reads one `widgets/<id>/` folder and holds it to every rule above. */
+export async function readPackage(root: string, id: string): Promise<WidgetPackage> {
+  const files = await readFolder(root, id, 'widget')
+
   if (!files.some((f) => f.name === 'manifest.json')) throw new ValidationError(id, 'manifest.json is missing')
   if (!files.some((f) => f.name === 'index.html')) throw new ValidationError(id, 'index.html is missing')
 
@@ -203,19 +278,33 @@ export async function readPackage(root: string, id: string): Promise<WidgetPacka
     if (off.length) throw new ValidationError(id, `${file.name} loads a script from outside the package: ${off.join(', ')}`)
   }
 
-  files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-  return { id, manifest, files }
+  return { kind: 'widget', id, version: manifest.version, manifest, files }
+}
+
+/**
+ * Every folder in `root`, validated as `kind`, in id order.
+ *
+ * A root that does not exist answers nothing: `themes/` is empty until the first one is
+ * published, and a repository with no widgets is a legitimate state too.
+ */
+export async function readAll(root: string, kind: Kind): Promise<Package[]> {
+  let ids: string[] = []
+  try { ids = await readdir(root) } catch { return [] }
+  const packages: Package[] = []
+  for (const id of ids.sort()) {
+    // Each root holds a README of its own explaining what goes in it.
+    if (!(await stat(join(root, id))).isDirectory()) continue
+    packages.push(kind === 'theme' ? await readThemePackage(root, id) : await readPackage(root, id))
+  }
+  return packages
 }
 
 /** Every widget folder in `root`, validated, in id order. */
 export async function readAllPackages(root: string): Promise<WidgetPackage[]> {
-  let ids: string[] = []
-  try { ids = await readdir(root) } catch { return [] }
-  const packages: WidgetPackage[] = []
-  for (const id of ids.sort()) {
-    // The folder holds a README of its own explaining what goes in it.
-    if (!(await stat(join(root, id))).isDirectory()) continue
-    packages.push(await readPackage(root, id))
-  }
-  return packages
+  return (await readAll(root, 'widget')) as WidgetPackage[]
+}
+
+/** Every theme folder in `root`, validated, in id order. */
+export async function readAllThemes(root: string): Promise<ThemePackage[]> {
+  return (await readAll(root, 'theme')) as ThemePackage[]
 }

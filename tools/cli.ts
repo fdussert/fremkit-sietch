@@ -11,11 +11,12 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from './build.js'
 import { renderPage } from './page.js'
-import { readAllPackages } from './validate.js'
+import { readAllPackages, readAllThemes } from './validate.js'
 import { DEFAULT_BASE_URL, readPublishedIndex } from './published.js'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const WIDGETS_DIR = join(root, 'widgets')
+const THEMES_DIR = join(root, 'themes')
 const DIST_DIR = join(root, 'dist')
 
 /** Who this index says it is, and where its files will live. Both are this repository's identity. */
@@ -28,7 +29,17 @@ const REGISTRY_NAME = 'fremkit-sietch'
  * Fremkit at it with `FREMKIT_DEV=1 FREMKIT_REGISTRY_URL=…`. The index carries absolute URLs, so
  * without this the zips would be advertised on the Pages origin a local `dist/` is not on.
  */
-const BASE_URL = process.env.FREMKIT_REGISTRY_BASE || DEFAULT_BASE_URL
+const configuredBase = process.env.FREMKIT_REGISTRY_BASE
+const BASE_URL = configuredBase || DEFAULT_BASE_URL
+/**
+ * True when this run is building against a development origin rather than the published one.
+ *
+ * It changes exactly one thing: an index that cannot be read is tolerated. On the real origin
+ * "unknown" has to fail the run, because every monotonicity check rests on it — but a local
+ * `dist/` has to be *built* before it can be served, so on the first pass there is nothing to
+ * read and no publication to protect.
+ */
+const DEV_BASE = Boolean(configuredBase) && configuredBase !== DEFAULT_BASE_URL
 
 async function fetchPublished(url: string): Promise<Buffer> {
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000) })
@@ -43,14 +54,23 @@ async function main(): Promise<void> {
     process.exit(2)
   }
 
-  const packages = await readAllPackages(WIDGETS_DIR)
-  console.log(`${packages.length} widget folder(s) validated`)
+  const widgets = await readAllPackages(WIDGETS_DIR)
+  const themes = await readAllThemes(THEMES_DIR)
+  console.log(`${widgets.length} widget folder(s) and ${themes.length} theme folder(s) validated`)
 
   // Only a 404 is survivable; see published.ts. Everything the build refuses to do twice rests
   // on this answer, so "unknown" must fail the run rather than pass as "nothing published yet".
-  const previous = await readPublishedIndex(BASE_URL)
-  if (previous === null) console.log('no index published yet: nothing to check this build against')
-  const result = await build(packages, {
+  let previous = null as Awaited<ReturnType<typeof readPublishedIndex>>
+  try {
+    previous = await readPublishedIndex(BASE_URL)
+    if (previous === null) console.log('no index published yet: nothing to check this build against')
+  } catch (err) {
+    if (!DEV_BASE) throw err
+    // A development origin has to be built before it can be served, so the first pass has
+    // nothing to read — and nothing published there to protect.
+    console.warn(`warning: ${(err as Error).message}; building against ${BASE_URL} with no history`)
+  }
+  const result = await build({ widgets, themes }, {
     registry: REGISTRY_NAME,
     baseUrl: BASE_URL,
     previous,

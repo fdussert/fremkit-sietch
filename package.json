@@ -1,0 +1,27 @@
+{
+  "name": "fremkit-widgets",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@9.4.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsx tools/cli.ts build",
+    "validate": "tsx tools/cli.ts validate",
+    "check-vendor": "tsx tools/check-vendor.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "tsx": "^4.23.13",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "~5.9.0",
+    "vitest": "^5.0.1"
+  }
+}

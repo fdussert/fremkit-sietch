@@ -43,6 +43,21 @@ const COPIES: Record<string, string> = {
 }
 
 /**
+ * Copies whose upstream file does not exist yet.
+ *
+ * `themes/theme.ts` is the theme schema, and it arrives with Fremkit's theme pull request. The
+ * entry is written now so nobody has to remember it later: while the upstream file is a 404 the
+ * check says so and carries on, and the moment the file lands — `ThemeSchema`, `TokensSchema`,
+ * one expression per token — copying it here makes the entry strict without touching this list.
+ *
+ * A 404 is the only tolerated outcome. A file that exists and differs is a failure like any
+ * other, and so is a network error: "not there yet" has to be a fact, not a guess.
+ */
+const PENDING: Record<string, string> = {
+  'themes/theme.ts': 'server/src/themes/theme.ts',
+}
+
+/**
  * The shims are not copies, so they are checked by what they must agree on rather than by
  * their text: one regular expression, spelled the same way on both sides.
  */
@@ -55,6 +70,22 @@ async function upstream(path: string): Promise<string> {
   if (!/^https?:\/\//.test(base)) return readFile(join(base, path), 'utf8')
   const url = `${base}/${path}`
   const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`could not read ${url}: HTTP ${res.status}`)
+  return res.text()
+}
+
+/** `null` when the upstream file is demonstrably not there; throws on anything else. */
+async function upstreamIfPresent(path: string): Promise<string | null> {
+  const base = UPSTREAM.replace(/\/+$/, '')
+  if (!/^https?:\/\//.test(base)) {
+    return readFile(join(base, path), 'utf8').catch((err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT') return null
+      throw err
+    })
+  }
+  const url = `${base}/${path}`
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  if (res.status === 404) return null
   if (!res.ok) throw new Error(`could not read ${url}: HTTP ${res.status}`)
   return res.text()
 }
@@ -72,6 +103,17 @@ async function main(): Promise<void> {
     const theirs = await upstream(path)
     if (mine === theirs) { console.log(`ok   tools/vendor/${local}`); continue }
     problems.push(`tools/vendor/${local} differs from ${path} upstream — copy it over in its own commit`)
+  }
+
+  for (const [local, path] of Object.entries(PENDING)) {
+    const mine = await readFile(join(root, 'tools', 'vendor', local), 'utf8').catch(() => null)
+    const theirs = await upstreamIfPresent(path)
+    if (theirs === null) {
+      console.log(`skip tools/vendor/${local} — ${path} does not exist upstream yet`)
+      continue
+    }
+    if (mine !== null && mine === theirs) { console.log(`ok   tools/vendor/${local}`); continue }
+    problems.push(`${path} exists upstream now: copy it to tools/vendor/${local} and move the entry out of PENDING`)
   }
 
   for (const { local, upstream: path, name } of CONSTANTS) {

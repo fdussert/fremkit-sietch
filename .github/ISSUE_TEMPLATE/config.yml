@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A problem in a published widget
+    url: https://github.com/fdussert/fremkit-widgets/security/advisories/new
+    about: Report it privately — a confirmed report gets the widget pulled from the index first.
+  - name: A problem in Fremkit itself
+    url: https://github.com/fdussert/fremkit/issues
+    about: The server, the admin, the bridge and the installer live in the main repository.

@@ -1,0 +1,46 @@
+name: Validate
+
+# What a pull request gets: every rule the publish workflow applies, and nothing written
+# anywhere. The two run the same code path, so a pull request that passes here cannot fail on
+# merge for a reason its author could have been told about.
+on:
+  pull_request:
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+# A fork's pull request gets a read-only token. Nothing in this workflow writes, and the widget
+# being validated is code from that fork: it is read, never run.
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate widgets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      # The vendored manifest schema must be the one Fremkit released, or this registry
+      # publishes widgets the installer refuses.
+      - run: pnpm check-vendor
+
+      # Reads the index already on Pages, so "the version must go up" is checked before merge.
+      - run: pnpm validate

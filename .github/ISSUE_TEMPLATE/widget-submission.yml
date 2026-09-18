@@ -1,0 +1,47 @@
+name: Widget submission
+description: Propose a widget before writing the pull request
+title: "widget: "
+labels: ["widget"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Optional — you can open a pull request straight away. This is for agreeing on the shape
+        of a widget before you write it, which is usually the cheaper order.
+  - type: input
+    id: id
+    attributes:
+      label: Widget id
+      description: Lower case, `[a-z0-9_-]+`, and the folder name it will live under.
+      placeholder: synology-storage
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What it shows, and where its data comes from
+      description: A tile on the dashboard, a compact line in the bar, or both.
+    validations:
+      required: true
+  - type: textarea
+    id: permissions
+    attributes:
+      label: What it needs
+      description: |
+        The channels it reads, the commands it sends, the network hosts it reaches, and any
+        Fremkit connection type it needs. Every user is shown this list before installing.
+      placeholder: |
+        subscriptions: synology:*
+        network: (none — it goes through the connection)
+        connections: synology
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Before opening it
+      options:
+        - label: The widget is mine to publish under this repository's MIT licence
+          required: true
+        - label: It carries no personal host, IP, token, account or e-mail address
+          required: true

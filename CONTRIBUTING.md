@@ -16,3 +16,22 @@ permission the previous one did not is shown to every user as a new consent.
 
 Reviews look at what the widget asks for and what it does with remote data (escape it with
 `Fremkit.esc`), not at taste. Security concerns: see [SECURITY.md](SECURITY.md).
+
+## Running the checks before you open it
+
+```bash
+pnpm install
+pnpm validate
+```
+
+That is exactly what the pull request runs. The full list of what it refuses is in the
+[README](README.md#what-gets-checked).
+
+## About `tools/vendor/`
+
+The manifest schema is Fremkit's, not this repository's: `tools/vendor/widgets/manifest.ts`,
+`net/private.ts` and `backup/zip.ts` are byte-for-byte copies of the files of the same name in
+[fdussert/fremkit](https://github.com/fdussert/fremkit). A copy rather than a submodule, so a
+clone builds with nothing but `pnpm install` — and `pnpm check-vendor`, which both workflows run,
+fetches the upstream files and fails the run on any difference. Never edit them here: change them
+upstream, then copy them over in their own commit.

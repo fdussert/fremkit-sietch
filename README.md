@@ -22,9 +22,42 @@ version asks for more.
 widgets/<id>/manifest.json   what the widget is, its version, the SDK it needs, its permissions
 widgets/<id>/index.html      the widget
 widgets/<id>/...             any asset it ships (images, fonts, scripts of its own)
+tools/                       the validator, the packer and the index builder (TypeScript, vitest)
+tools/vendor/                byte-for-byte copies of Fremkit's manifest, zip and address rules
+.github/workflows/           validate.yml on a pull request, publish.yml on main
 ```
 
-The `index.json` is generated: never edit it by hand, never commit it.
+The `index.json` and `dist/` are generated: never edit them by hand, never commit them.
+
+## Building it locally
+
+```bash
+pnpm install
+pnpm test          # the validator, the packer and the index builder
+pnpm validate      # every rule, nothing written — what a pull request runs
+pnpm build         # the same, plus dist/index.json, dist/widgets/*.zip and dist/index.html
+pnpm check-vendor  # the vendored schema is still Fremkit's
+```
+
+`pnpm validate` and `pnpm build` read the index currently on Pages, so a version that does not go
+up is refused before merge, and older releases stay downloadable for a rollback.
+
+## What gets checked
+
+A package is the widget's folder, zipped: `manifest.json` at the root, `index.html`, its assets.
+The CI refuses a folder that
+
+- holds a dotfile, a symlink, a nested archive, an absolute or climbing path, or anything that is
+  not a regular file;
+- is over 200 files, 5 MB zipped, 20 MB unpacked, or holds a file over 5 MB;
+- has a `manifest.json` the Fremkit schema does not accept, or an `id` that is not the folder name;
+- declares a private, loopback, link-local or `.local`-style host in `permissions.network`;
+- loads a `<script src=>` from outside the package — the widget CSP would block it anyway;
+- reuses a published version, or goes backwards from it.
+
+The zip is deterministic — sorted entries, a fixed timestamp, stored rather than compressed — so
+rebuilding an unchanged widget produces the same bytes, the same `sha256`, and no pointless
+update for anyone who already has it.
 
 ## Licence
 

@@ -15,7 +15,9 @@ function pkg(over: Record<string, unknown> = {}, files?: { name: string; data: B
     version: '1.0.0', sdk: 1, minSize: [8, 4], defaultSize: [8, 4], ...over,
   })
   return {
+    kind: 'widget' as const,
     id: manifest.id,
+    version: manifest.version,
     manifest,
     files: files ?? [
       { name: 'index.html', data: Buffer.from('<html></html>') },
@@ -176,7 +178,7 @@ describe('build', () => {
     const bytes = new Map<string, Buffer>()
     for (const version of ['1.0.0', '1.1.0', '1.2.0', '1.3.0']) {
       const p = pkg({ version })
-      bytes.set(zipName('demo', version), packageZip(p))
+      bytes.set(zipName('widget', 'demo', version), packageZip(p))
       const out: { index: RegistryIndex } = await build([p], {
         ...opts, previous, fetchPublished: async (url) => bytes.get(`widgets/${url.split('/').pop()}`)!,
       })

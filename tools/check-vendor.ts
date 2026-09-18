@@ -17,12 +17,23 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 /**
- * Where the upstream files are read from. The default is the raw view of the main repository,
+ * The Fremkit commit the vendored files were copied from.
+ *
+ * A commit, not `main`. Comparing against a moving branch means this check starts failing the
+ * moment somebody touches the schema upstream — on a pull request that has nothing to do with
+ * it, for a reason its author cannot fix here. Pinned, the check answers one question with one
+ * answer: are these copies the ones that were taken. Bumping it is part of the commit that
+ * copies new files over, and that commit is where the decision belongs.
+ */
+const VENDOR_REF = '11fd60b4f42d9e554e043fd6fb6141ecfd49cbca'
+
+/**
+ * Where the upstream files are read from. The default is the raw view of the pinned commit,
  * which is what CI uses. A local path works too, so the owner can check a Fremkit change against
  * this repository *before* pushing it — which is the only moment the answer can still be acted
- * on cheaply.
+ * on cheaply, and the only way to run this at all before the commit exists on GitHub.
  */
-const UPSTREAM = process.env.FREMKIT_RAW_BASE || 'https://raw.githubusercontent.com/fdussert/fremkit/main'
+const UPSTREAM = process.env.FREMKIT_RAW_BASE || `https://raw.githubusercontent.com/fdussert/fremkit/${VENDOR_REF}`
 
 /** local path under tools/vendor → path under the main repository. */
 const COPIES: Record<string, string> = {
@@ -74,7 +85,7 @@ async function main(): Promise<void> {
     for (const p of problems) console.error(`FAIL ${p}`)
     process.exit(1)
   }
-  console.log('vendored schema is in step with Fremkit')
+  console.log(`vendored schema is in step with fremkit ${VENDOR_REF.slice(0, 12)}`)
 }
 
 main().catch((err: Error) => {

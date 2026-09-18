@@ -1,7 +1,7 @@
 { "id": "bambu-job",
   "name": {
-    "fr": "Job Bambu",
-    "en": "Bambu job"
+    "fr": "Impression Bambu",
+    "en": "Bambu print"
   },
   "version": "1.0.2",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",

@@ -40,22 +40,20 @@ const COPIES: Record<string, string> = {
   'widgets/manifest.ts': 'server/src/widgets/manifest.ts',
   'net/private.ts': 'server/src/net/private.ts',
   'backup/zip.ts': 'server/src/backup/zip.ts',
+  'themes/theme.ts': 'server/src/themes/theme.ts',
 }
 
 /**
  * Copies whose upstream file does not exist yet.
  *
- * `themes/theme.ts` is the theme schema, and it arrives with Fremkit's theme pull request. The
- * entry is written now so nobody has to remember it later: while the upstream file is a 404 the
- * check says so and carries on, and the moment the file lands — `ThemeSchema`, `TokensSchema`,
- * one expression per token — copying it here makes the entry strict without touching this list.
+ * Empty: `themes/theme.ts` sat here while Fremkit's theme pull request was open, and moved into
+ * `COPIES` the day it landed — which is exactly what the entry was written early for. The
+ * mechanism stays for the next one.
  *
  * A 404 is the only tolerated outcome. A file that exists and differs is a failure like any
  * other, and so is a network error: "not there yet" has to be a fact, not a guess.
  */
-const PENDING: Record<string, string> = {
-  'themes/theme.ts': 'server/src/themes/theme.ts',
-}
+const PENDING: Record<string, string> = {}
 
 /**
  * The shims are not copies, so they are checked by what they must agree on rather than by

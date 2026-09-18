@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Synology storage</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;color:#e6e8eb;font-family:-apple-system,system-ui,sans-serif;overflow:hidden}
+  .wrap{box-sizing:border-box;height:100%;padding:14px 18px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+  .vol{display:flex;flex-direction:column;gap:4px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:15px}
+  .row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar{height:8px;border-radius:4px;background:#252a32;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--accent, #d9b36a);width:0;transition:width .4s}
+  .bar.warn>i{background:#e0a33a}
+  .bar.bad>i{background:#e05a4a}
+  .muted{color:#8b93a0}
+  .disks{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:2px}
+  .disk{display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap}
+  .dot{width:9px;height:9px;border-radius:5px;background:#4caf7d;flex:0 0 auto}
+  .dot.warn{background:#e0a33a}
+  .dot.bad{background:#e05a4a}
+  .dot.unknown{background:#6b7280}
+  .note{font-size:14px;color:#8b93a0}
+  /* Compact: one line, no title and no surface of its own. */
+  html.compact .wrap{padding:0 10px;flex-direction:row;align-items:center;gap:8px;justify-content:center}
+  html.compact .line{display:flex;align-items:center;gap:7px;font-size:17px;white-space:nowrap}
+  html.compact .cbar{width:46px;height:6px;border-radius:3px;background:#252a32;overflow:hidden;flex:0 0 auto}
+  html.compact .cbar>i{display:block;height:100%;background:var(--accent, #d9b36a);width:0}
+  /* The host says which way round the tile is: on-light means dark text on a light body. */
+  html.on-light body{color:var(--on-surface,#0b0d10)}
+  html.on-light .muted,html.on-light .note{color:var(--on-surface,#0b0d10);opacity:.75}
+  /* A bar painted in the accent vanishes when the body *is* the accent, so it flips to the text colour. */
+  html.on-light .bar,html.on-light .cbar,html.accent-fill .bar,html.accent-fill .cbar{background:rgba(128,128,128,.35)}
+  html.accent-fill .bar>i,html.accent-fill .cbar>i{background:var(--on-surface,#0b0d10)}
+</style></head><body><div class="wrap" id="root"></div>
+<script>
+  var L = {
+    pick:        { fr: 'Choisissez une connexion Synology', en: 'Pick a Synology connection' },
+    offline:     { fr: 'NAS injoignable', en: 'NAS unreachable' },
+    unauthorized:{ fr: 'compte refusé par le NAS', en: 'the NAS refused the account' },
+    unconfigured:{ fr: 'connexion incomplète', en: 'the connection is incomplete' },
+    waiting:     { fr: 'en attente du NAS…', en: 'waiting for the NAS…' },
+    noVolumes:   { fr: 'aucun volume', en: 'no volume' },
+    used:        { fr: '{used} / {total}', en: '{used} / {total}' },
+    tb:          { fr: '{n} To', en: '{n} TB' },
+    gb:          { fr: '{n} Go', en: '{n} GB' },
+    mb:          { fr: '{n} Mo', en: '{n} MB' },
+    degrees:     { fr: '{n} °C', en: '{n} °C' }
+  }
+
+  var settings = {}, snapshot = null, unsub = null, channel = null
+
+  function t(key, params) { return Fremkit.t(L[key], params) }
+
+  /** A size a person reads, never more than one decimal. */
+  function size(bytes) {
+    var n = Number(bytes) || 0
+    if (n >= 1099511627776) return t('tb', { n: Math.round(n / 109951162777.6) / 10 })
+    if (n >= 1073741824) return t('gb', { n: Math.round(n / 1073741824) })
+    return t('mb', { n: Math.round(n / 1048576) })
+  }
+
+  function percent(volume) {
+    var total = Number(volume.size) || 0
+    if (total <= 0) return 0
+    return Math.max(0, Math.min(100, Math.round((Number(volume.used) || 0) / total * 100)))
+  }
+
+  /** The threshold a setting written before this existed, or typed as nonsense, falls back to. */
+  function warnAt() {
+    var n = Number(settings.warnPercent)
+    return n >= 1 && n <= 100 ? n : 85
+  }
+
+  function volumeClass(volume) {
+    var use = percent(volume)
+    if (volume.status && volume.status !== 'normal') return 'bad'
+    if (use >= warnAt()) return use >= 95 ? 'bad' : 'warn'
+    return ''
+  }
+
+  /** DSM's own SMART verdict, reduced to the three states a dot can be. */
+  function diskClass(disk) {
+    var smart = String(disk.smart || '')
+    var status = String(disk.status || '')
+    if (smart === 'critical' || status === 'crashed' || status === 'failing') return 'bad'
+    if (smart === 'warning' || (status && status !== 'normal')) return 'warn'
+    if (!smart) return 'unknown'
+    return ''
+  }
+
+  function connectionId() { return typeof settings.connection === 'string' ? settings.connection : '' }
+
+  function message() {
+    if (!connectionId()) return t('pick')
+    if (!snapshot) return t('waiting')
+    if (snapshot.error === 'offline') return t('offline')
+    if (snapshot.error === 'unauthorized') return t('unauthorized')
+    if (snapshot.error === 'unconfigured') return t('unconfigured')
+    if (!snapshot.volumes || !snapshot.volumes.length) return t('noVolumes')
+    return null
+  }
+
+  function renderTile(root) {
+    var volumes = snapshot.volumes || []
+    var html = volumes.map(function (v) {
+      var use = percent(v)
+      // Every string here comes from the NAS: a volume may be called anything at all, so it is
+      // escaped, and the width is a number long before it reaches a style attribute.
+      return '<div class="vol"><div class="row"><span class="name">' + Fremkit.esc(v.id) + '</span>'
+        + '<span class="muted">' + Fremkit.esc(t('used', { used: size(v.used), total: size(v.size) }))
+        + ' · ' + use + '%</span></div>'
+        + '<div class="bar ' + volumeClass(v) + '"><i style="width:' + use + '%"></i></div></div>'
+    }).join('')
+
+    if (settings.showDisks !== false && (snapshot.disks || []).length) {
+      html += '<div class="disks">' + snapshot.disks.map(function (d) {
+        var temp = typeof d.temperature === 'number' ? ' ' + Fremkit.esc(t('degrees', { n: d.temperature })) : ''
+        return '<span class="disk"><span class="dot ' + diskClass(d) + '"></span>'
+          + Fremkit.esc(d.name) + '<span class="muted">' + temp + '</span></span>'
+      }).join('') + '</div>'
+    }
+    root.innerHTML = html
+  }
+
+  function renderCompact(root) {
+    var hottest = settings.compactMode === 'hottest'
+    if (hottest) {
+      var disks = (snapshot.disks || []).filter(function (d) { return typeof d.temperature === 'number' })
+      if (!disks.length) { root.innerHTML = '<span class="note">' + Fremkit.esc(t('waiting')) + '</span>'; return }
+      var worst = disks.reduce(function (a, b) { return b.temperature > a.temperature ? b : a })
+      root.innerHTML = '<span class="line"><span class="dot ' + diskClass(worst) + '"></span>'
+        + Fremkit.esc(t('degrees', { n: worst.temperature })) + '</span>'
+      return
+    }
+    var volumes = snapshot.volumes || []
+    if (!volumes.length) { root.innerHTML = '<span class="note">' + Fremkit.esc(t('noVolumes')) + '</span>'; return }
+    var fullest = volumes.reduce(function (a, b) { return percent(b) > percent(a) ? b : a })
+    var use = percent(fullest)
+    root.innerHTML = '<span class="line"><span class="cbar"><i style="width:' + use + '%"></i></span>'
+      + use + '%</span>'
+  }
+
+  function render() {
+    var root = document.getElementById('root')
+    var problem = message()
+    if (problem) { root.innerHTML = '<span class="note">' + Fremkit.esc(problem) + '</span>'; return }
+    if (Fremkit.compact) renderCompact(root)
+    else renderTile(root)
+  }
+
+  function applySettings(next) {
+    settings = next || {}
+    var id = connectionId()
+    var target = id ? 'synology:' + id : null
+    if (target !== channel) {
+      if (unsub) { unsub(); unsub = null }
+      // The volumes of a NAS that was unselected are not this widget's business any more.
+      snapshot = null
+      channel = target
+      if (channel) unsub = Fremkit.subscribe(channel, function (data) { snapshot = data; render() })
+    }
+    render()
+  }
+
+  Fremkit.whenReady(function () {
+    document.documentElement.lang = Fremkit.locale
+    Fremkit.onLocale(function (locale) { document.documentElement.lang = locale; render() })
+    Fremkit.onResize(render)
+    applySettings(Fremkit.settings)
+    Fremkit.onSettings(applySettings)
+  })
+</script></body></html>

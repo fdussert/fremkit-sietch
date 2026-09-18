@@ -1,0 +1,26 @@
+{ "id": "synology-system",
+  "name": { "fr": "Système Synology", "en": "Synology system" },
+  "version": "1.0.0",
+  "sdk": 1,
+  "author": "Fremkit",
+  "license": "MIT",
+  "homepage": "https://github.com/fdussert/fremkit-widgets",
+  "description": { "fr": "Processeur, mémoire et réseau d’un NAS", "en": "CPU, memory and network of a NAS" },
+  "icon": "activity", "minSize": [8, 4], "defaultSize": [12, 4],
+  "compact": { "width": 5 },
+  "subscriptions": ["synology:*"],
+  "settingsSchema": {
+    "connection": { "type": "connection", "connectionType": "synology",
+      "label": { "fr": "Connexion", "en": "Connection" } },
+    "showNetwork": { "type": "boolean", "scope": "tile", "default": true,
+      "label": { "fr": "Afficher le réseau", "en": "Show the network" } },
+    "showUptime": { "type": "boolean", "scope": "tile", "default": true,
+      "label": { "fr": "Afficher la durée de fonctionnement", "en": "Show the uptime" } },
+    "compactMode": { "type": "enum", "scope": "compact", "default": "cpu",
+      "label": { "fr": "Barre : afficher", "en": "Bar: show" },
+      "options": [
+        { "value": "cpu", "label": { "fr": "Processeur", "en": "CPU" } },
+        { "value": "memory", "label": { "fr": "Mémoire", "en": "Memory" } },
+        { "value": "network", "label": { "fr": "Réseau", "en": "Network" } }
+      ] }
+  } }

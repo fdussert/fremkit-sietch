@@ -1,0 +1,25 @@
+{ "id": "synology-storage",
+  "name": { "fr": "Stockage Synology", "en": "Synology storage" },
+  "version": "1.0.0",
+  "sdk": 1,
+  "author": "Fremkit",
+  "license": "MIT",
+  "homepage": "https://github.com/fdussert/fremkit-widgets",
+  "description": { "fr": "Volumes, santé et température des disques d’un NAS", "en": "Volumes, disk health and temperature of a NAS" },
+  "icon": "hard-drive", "minSize": [8, 4], "defaultSize": [16, 8],
+  "compact": { "width": 5 },
+  "subscriptions": ["synology:*"],
+  "settingsSchema": {
+    "connection": { "type": "connection", "connectionType": "synology",
+      "label": { "fr": "Connexion", "en": "Connection" } },
+    "showDisks": { "type": "boolean", "scope": "tile", "default": true,
+      "label": { "fr": "Afficher les disques", "en": "Show the disks" } },
+    "warnPercent": { "type": "number", "scope": "tile", "default": 85,
+      "label": { "fr": "Alerte au-delà de (%)", "en": "Warn above (%)" } },
+    "compactMode": { "type": "enum", "scope": "compact", "default": "fullest",
+      "label": { "fr": "Barre : afficher", "en": "Bar: show" },
+      "options": [
+        { "value": "fullest", "label": { "fr": "Le volume le plus plein", "en": "The fullest volume" } },
+        { "value": "hottest", "label": { "fr": "Le disque le plus chaud", "en": "The hottest disk" } }
+      ] }
+  } }

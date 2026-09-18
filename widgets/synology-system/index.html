@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Synology system</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;color:#e6e8eb;font-family:-apple-system,system-ui,sans-serif;overflow:hidden}
+  .wrap{box-sizing:border-box;height:100%;padding:14px 18px;display:flex;flex-direction:column;justify-content:center;gap:8px;overflow:hidden}
+  .gauge{display:flex;flex-direction:column;gap:4px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:15px}
+  .bar{height:8px;border-radius:4px;background:#252a32;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--accent, #d9b36a);width:0;transition:width .4s}
+  .bar.warn>i{background:#e0a33a}
+  .bar.bad>i{background:#e05a4a}
+  .muted{color:#8b93a0}
+  .net{display:flex;gap:16px;font-size:14px;color:#8b93a0}
+  .note{font-size:14px;color:#8b93a0}
+  /* Compact: one line, no title and no surface of its own. */
+  html.compact .wrap{padding:0 10px;flex-direction:row;align-items:center;justify-content:center;gap:8px}
+  html.compact .line{display:flex;align-items:center;gap:7px;font-size:17px;white-space:nowrap}
+  html.compact .cbar{width:46px;height:6px;border-radius:3px;background:#252a32;overflow:hidden;flex:0 0 auto}
+  html.compact .cbar>i{display:block;height:100%;background:var(--accent, #d9b36a);width:0}
+  /* The host says which way round the tile is: on-light means dark text on a light body. */
+  html.on-light body{color:var(--on-surface,#0b0d10)}
+  html.on-light .muted,html.on-light .note,html.on-light .net{color:var(--on-surface,#0b0d10);opacity:.75}
+  /* A bar painted in the accent vanishes when the body *is* the accent, so it flips to the text colour. */
+  html.on-light .bar,html.on-light .cbar,html.accent-fill .bar,html.accent-fill .cbar{background:rgba(128,128,128,.35)}
+  html.accent-fill .bar>i,html.accent-fill .cbar>i{background:var(--on-surface,#0b0d10)}
+</style></head><body><div class="wrap" id="root"></div>
+<script>
+  var L = {
+    pick:        { fr: 'Choisissez une connexion Synology', en: 'Pick a Synology connection' },
+    offline:     { fr: 'NAS injoignable', en: 'NAS unreachable' },
+    unauthorized:{ fr: 'compte refusé par le NAS', en: 'the NAS refused the account' },
+    unconfigured:{ fr: 'connexion incomplète', en: 'the connection is incomplete' },
+    waiting:     { fr: 'en attente du NAS…', en: 'waiting for the NAS…' },
+    cpu:         { fr: 'Processeur', en: 'CPU' },
+    memory:      { fr: 'Mémoire', en: 'Memory' },
+    down:        { fr: '↓ {rate}', en: '↓ {rate}' },
+    up:          { fr: '↑ {rate}', en: '↑ {rate}' },
+    perSecond:   { fr: '{n} {unit}/s', en: '{n} {unit}/s' },
+    days:        { fr: '{n} j', en: '{n} d' },
+    hours:       { fr: '{n} h', en: '{n} h' },
+    minutes:     { fr: '{n} min', en: '{n} min' },
+    uptime:      { fr: 'en marche {duration}', en: 'up {duration}' },
+    unknown:     { fr: '—', en: '—' }
+  }
+
+  var settings = {}, snapshot = null, unsub = null, channel = null
+
+  function t(key, params) { return Fremkit.t(L[key], params) }
+
+  /** A transfer rate a person reads. DSM counts bytes per second. */
+  function rate(bytesPerSecond) {
+    var n = Number(bytesPerSecond)
+    if (!isFinite(n) || n < 0) return t('unknown')
+    if (n >= 1048576) return t('perSecond', { n: Math.round(n / 104857.6) / 10, unit: 'MB' })
+    if (n >= 1024) return t('perSecond', { n: Math.round(n / 1024), unit: 'kB' })
+    return t('perSecond', { n: Math.round(n), unit: 'B' })
+  }
+
+  /** The coarsest unit that still says something: days, else hours, else minutes. */
+  function uptime(seconds) {
+    var n = Number(seconds)
+    if (!isFinite(n) || n <= 0) return null
+    if (n >= 86400) return t('days', { n: Math.floor(n / 86400) })
+    if (n >= 3600) return t('hours', { n: Math.floor(n / 3600) })
+    return t('minutes', { n: Math.floor(n / 60) })
+  }
+
+  function level(percent) {
+    if (percent >= 95) return 'bad'
+    if (percent >= 85) return 'warn'
+    return ''
+  }
+
+  /** A percentage the NAS may not have reported at all; null stays null rather than becoming 0. */
+  function pct(value) {
+    return typeof value === 'number' && isFinite(value)
+      ? Math.max(0, Math.min(100, Math.round(value)))
+      : null
+  }
+
+  function connectionId() { return typeof settings.connection === 'string' ? settings.connection : '' }
+
+  function message() {
+    if (!connectionId()) return t('pick')
+    if (!snapshot) return t('waiting')
+    if (snapshot.error === 'offline') return t('offline')
+    if (snapshot.error === 'unauthorized') return t('unauthorized')
+    if (snapshot.error === 'unconfigured') return t('unconfigured')
+    return null
+  }
+
+  function gauge(label, value) {
+    var shown = value === null ? t('unknown') : value + '%'
+    return '<div class="gauge"><div class="row"><span>' + Fremkit.esc(label) + '</span>'
+      + '<span class="muted">' + Fremkit.esc(shown) + '</span></div>'
+      + '<div class="bar ' + (value === null ? '' : level(value)) + '">'
+      + '<i style="width:' + (value === null ? 0 : value) + '%"></i></div></div>'
+  }
+
+  function renderTile(root) {
+    var html = gauge(t('cpu'), pct(snapshot.cpu))
+      + gauge(t('memory'), pct(snapshot.memory && snapshot.memory.usedPercent))
+
+    if (settings.showNetwork !== false) {
+      var net = snapshot.network || {}
+      html += '<div class="net"><span>' + Fremkit.esc(t('down', { rate: rate(net.rx) })) + '</span>'
+        + '<span>' + Fremkit.esc(t('up', { rate: rate(net.tx) })) + '</span></div>'
+    }
+    var up = settings.showUptime !== false ? uptime(snapshot.uptimeSeconds) : null
+    if (up) html += '<div class="net"><span>' + Fremkit.esc(t('uptime', { duration: up })) + '</span></div>'
+    root.innerHTML = html
+  }
+
+  function renderCompact(root) {
+    if (settings.compactMode === 'network') {
+      var net = snapshot.network || {}
+      root.innerHTML = '<span class="line">' + Fremkit.esc(t('down', { rate: rate(net.rx) })) + '</span>'
+        + '<span class="line muted">' + Fremkit.esc(t('up', { rate: rate(net.tx) })) + '</span>'
+      return
+    }
+    var memory = settings.compactMode === 'memory'
+    var value = pct(memory ? (snapshot.memory && snapshot.memory.usedPercent) : snapshot.cpu)
+    if (value === null) { root.innerHTML = '<span class="note">' + Fremkit.esc(t('waiting')) + '</span>'; return }
+    root.innerHTML = '<span class="line"><span class="cbar"><i style="width:' + value + '%"></i></span>'
+      + value + '%</span>'
+  }
+
+  function render() {
+    var root = document.getElementById('root')
+    var problem = message()
+    if (problem) { root.innerHTML = '<span class="note">' + Fremkit.esc(problem) + '</span>'; return }
+    if (Fremkit.compact) renderCompact(root)
+    else renderTile(root)
+  }
+
+  function applySettings(next) {
+    settings = next || {}
+    var id = connectionId()
+    var target = id ? 'synology:' + id : null
+    if (target !== channel) {
+      if (unsub) { unsub(); unsub = null }
+      // The load of a NAS that was unselected is not this widget's business any more.
+      snapshot = null
+      channel = target
+      if (channel) unsub = Fremkit.subscribe(channel, function (data) { snapshot = data; render() })
+    }
+    render()
+  }
+
+  Fremkit.whenReady(function () {
+    document.documentElement.lang = Fremkit.locale
+    Fremkit.onLocale(function (locale) { document.documentElement.lang = locale; render() })
+    Fremkit.onResize(render)
+    applySettings(Fremkit.settings)
+    Fremkit.onSettings(applySettings)
+  })
+</script></body></html>

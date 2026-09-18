@@ -188,10 +188,13 @@ export async function readPackage(root: string, id: string): Promise<WidgetPacka
     if (isPrivateLiteral(host) || isLocalName(host)) throw new ValidationError(id, `private or local network host: ${host}`)
   }
 
-  // `description` defaults to `''` in the schema, so an absent one is a bare string here rather
-  // than a missing key: the message is the same either way.
   for (const { path, value } of localizedTexts(manifest)) {
-    if (!isBilingual(value)) throw new ValidationError(id, `${path} must be a { "fr": …, "en": … } pair`)
+    if (isBilingual(value)) continue
+    // `description` is optional in the schema and defaults to `''`, so an *absent* one arrives
+    // here as an empty string rather than as a missing key. "must be a pair" would send an
+    // author looking for a type error in something they never wrote; say it is missing.
+    if (value === '' || value === undefined) throw new ValidationError(id, `${path} is required`)
+    throw new ValidationError(id, `${path} must be a { "fr": …, "en": … } pair`)
   }
 
   for (const file of files) {

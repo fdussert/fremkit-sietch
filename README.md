@@ -55,11 +55,15 @@ The CI refuses a folder that
 - has a `manifest.json` the Fremkit schema does not accept, or an `id` that is not the folder name;
 - shows a text that is not a `{ "fr": …, "en": … }` pair — the name, the description, every
   setting label, every list item label, every enum option label. Fremkit accepts a bare string
-  for the sake of older manifests; a registry read by both languages does not;
+  for the sake of older manifests; a registry read by both languages does not. **`description`
+  is therefore required here**, although the Fremkit schema treats it as optional: an absent one
+  is not a pair, so leaving it out fails the check (the message says so — `description is
+  required`, not a type error);
 - asks for the `config` channel, which carries the whole dashboard and no Fremkit will grant;
 - declares a private, loopback, link-local or `.local`-style host in `permissions.network`;
 - loads a `<script src=>` from outside the package — the widget CSP would block it anyway;
-- reuses a published version, or goes backwards from it.
+- reuses a published version, or goes backwards from it — and if the already-published index
+  cannot be read at all, the build **fails** rather than guessing that nothing was published.
 
 The zip is deterministic — sorted entries, a fixed timestamp, stored rather than compressed — so
 rebuilding an unchanged widget produces the same bytes, the same `sha256`, and no pointless

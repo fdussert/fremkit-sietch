@@ -27,8 +27,15 @@ import { INDEX_SCHEMA_VERSION, RegistryIndexSchema, type Download, type IndexWid
  * A zip carries an MS-DOS date per entry. "Now" would change the bytes, and therefore the hash,
  * on every rebuild of an unchanged widget. 1980-01-01 is the epoch of that date format, which is
  * as close as the format gets to saying "no time here".
+ *
+ * **Local, not `Date.UTC`.** The writer reads the date with `getFullYear()`, `getMonth()` and
+ * `getDate()` — local getters — so a UTC midnight is 1979-12-31 in Paris and the archive hashes
+ * differently there than in CI. Verified: the same folder produced three different sha256 values
+ * under `TZ=UTC`, `TZ=Europe/Paris` and `TZ=America/New_York`, and `build` then refused the
+ * republish as "already published with different contents". The local constructor makes the DOS
+ * fields read 1980-01-01 00:00 in every zone, which is what reproducible has to mean here.
  */
-export const FIXED_MTIME = new Date(Date.UTC(1980, 0, 1, 0, 0, 0))
+export const FIXED_MTIME = new Date(1980, 0, 1, 0, 0, 0)
 
 /** How many older releases stay downloadable beside the current one. */
 export const KEEP_PREVIOUS = 2

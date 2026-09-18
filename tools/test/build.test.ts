@@ -27,6 +27,19 @@ function pkg(over: Record<string, unknown> = {}, files?: { name: string; data: B
 const opts = { registry: 'fremkit-sietch', baseUrl: BASE, now: NOW }
 
 describe('packageZip', () => {
+  /** The DOS date and time words the writer put in the first local header. */
+  function dosStamp(zip: Buffer): { date: number; time: number } {
+    return { time: zip.readUInt16LE(10), date: zip.readUInt16LE(12) }
+  }
+
+  it('stamps 1980-01-01 00:00 whatever the machine\'s timezone is', () => {
+    // The writer builds the DOS date from *local* getters. A `Date.UTC(1980,0,1)` is 1979-12-31
+    // in Paris, so the same folder hashed differently there than in CI — and `build` then
+    // refused the republish as "already published with different contents".
+    // 1980-01-01 is ((1980-1980) << 9) | (1 << 5) | 1 = 33, at time 0.
+    expect(dosStamp(packageZip(pkg()))).toEqual({ date: 33, time: 0 })
+  })
+
   it('produces the same bytes for the same folder, every time', () => {
     // The index publishes a sha256 and Fremkit refuses a download that does not match it. A
     // timestamp of "now" in the archive would change the hash on every rebuild, and every user

@@ -11,10 +11,11 @@ concurrency:
   group: publish
   cancel-in-progress: false
 
+# The default for every job: read the repository and nothing else. The Pages token is granted to
+# the deploy job alone — the build runs a validator over code from a pull request that was
+# merged, and a job that can write to Pages should not also be the one reading that.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   build:
@@ -53,6 +54,9 @@ jobs:
     name: deploy to Pages
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

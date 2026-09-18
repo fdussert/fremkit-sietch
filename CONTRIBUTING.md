@@ -35,7 +35,16 @@ consent to. It is the easiest thing to publish here and the safest thing to inst
 two ids are refused here.
 
 The four tokens `accent`, `bg`, `surface` and `text` are published in the index, which is what
-the admin paints as a swatch strip — so a theme needs no preview image.
+the admin paints as a swatch strip — so a theme needs no preview image. They are the only four
+that are *required*; every other token is optional and falls back to the built-in theme's value.
+
+**Every token is checked against the shape its CSS property accepts** — one expression per token,
+from Fremkit's own `TokensSchema`, vendored here as `tools/vendor/themes/theme.ts`. A colour has
+to be a hex colour, a length has to carry a unit, a shadow is offsets and a colour and nothing
+that could fetch. A token Fremkit does not have is refused rather than passed through, so a typo
+is something you are told about here instead of something that silently paints nothing. It is
+the same schema the installer applies to the downloaded package, which is what makes a pull
+request that passes here an install that works there.
 
 ## Running the checks before you open it
 

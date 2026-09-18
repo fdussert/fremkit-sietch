@@ -25,7 +25,13 @@ pnpm validate
 ```
 
 That is exactly what the pull request runs. The full list of what it refuses is in the
-[README](README.md#what-gets-checked).
+[README](README.md#what-gets-checked); the two easiest to trip over are that every text a user
+sees must be a `{ "fr": …, "en": … }` pair, and that `version` must be greater than the one
+already published.
+
+To see your widget actually install, build and serve the index locally and point a development
+Fremkit at it — [Testing the whole chain locally](README.md#testing-the-whole-chain-locally).
+The packed bytes are reproducible, so the hash you get is the hash CI will get.
 
 ## About `tools/vendor/`
 

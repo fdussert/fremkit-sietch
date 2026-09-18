@@ -53,13 +53,40 @@ The CI refuses a folder that
   not a regular file;
 - is over 200 files, 5 MB zipped, 20 MB unpacked, or holds a file over 5 MB;
 - has a `manifest.json` the Fremkit schema does not accept, or an `id` that is not the folder name;
+- shows a text that is not a `{ "fr": …, "en": … }` pair — the name, the description, every
+  setting label, every list item label, every enum option label. Fremkit accepts a bare string
+  for the sake of older manifests; a registry read by both languages does not;
+- asks for the `config` channel, which carries the whole dashboard and no Fremkit will grant;
 - declares a private, loopback, link-local or `.local`-style host in `permissions.network`;
 - loads a `<script src=>` from outside the package — the widget CSP would block it anyway;
 - reuses a published version, or goes backwards from it.
 
 The zip is deterministic — sorted entries, a fixed timestamp, stored rather than compressed — so
 rebuilding an unchanged widget produces the same bytes, the same `sha256`, and no pointless
-update for anyone who already has it.
+update for anyone who already has it. The same folder packs to the same hash on any machine, in
+any timezone.
+
+## Testing the whole chain locally
+
+Before anything is published there is nothing for a Fremkit to install from, so build the index
+against a local origin and serve it:
+
+```bash
+FREMKIT_REGISTRY_BASE=http://127.0.0.1:8080 pnpm build
+npx serve dist -l 8080
+```
+
+Then point a development Fremkit at it. The registry URL is a constant there, and the override
+is honoured only under `FREMKIT_DEV=1`:
+
+```bash
+FREMKIT_DEV=1 FREMKIT_REGISTRY_URL=http://127.0.0.1:8080/index.json \
+  FREMKIT_PORT=4301 FREMKIT_DATA_DIR=/tmp/fremkit-bench pnpm start
+```
+
+`FREMKIT_REGISTRY_BASE` matters because the index carries absolute URLs: without it the zips are
+advertised on the Pages origin, which a local `dist/` is not. The build reads the published
+index to check that a version only ever goes up, and tolerates the 404 it gets on a first run.
 
 ## Licence
 

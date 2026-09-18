@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from './build.js'
 import { renderPage } from './page.js'
 import { readAllPackages, readAllThemes } from './validate.js'
-import { DEFAULT_BASE_URL, readPublishedIndex } from './published.js'
+import { DEFAULT_BASE_URL, readPublishedIndex, toleratesMissingIndex } from './published.js'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const WIDGETS_DIR = join(root, 'widgets')
@@ -31,15 +31,8 @@ const REGISTRY_NAME = 'fremkit-sietch'
  */
 const configuredBase = process.env.FREMKIT_REGISTRY_BASE
 const BASE_URL = configuredBase || DEFAULT_BASE_URL
-/**
- * True when this run is building against a development origin rather than the published one.
- *
- * It changes exactly one thing: an index that cannot be read is tolerated. On the real origin
- * "unknown" has to fail the run, because every monotonicity check rests on it — but a local
- * `dist/` has to be *built* before it can be served, so on the first pass there is nothing to
- * read and no publication to protect.
- */
-const DEV_BASE = Boolean(configuredBase) && configuredBase !== DEFAULT_BASE_URL
+/** True when this run builds against a development origin; see `toleratesMissingIndex`. */
+const DEV_BASE = toleratesMissingIndex(configuredBase)
 
 async function fetchPublished(url: string): Promise<Buffer> {
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000) })

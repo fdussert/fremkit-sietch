@@ -17,6 +17,21 @@ import { RegistryIndexSchema, type RegistryIndex } from './schema.js'
 /** The default origin: GitHub Pages for this repository. */
 export const DEFAULT_BASE_URL = 'https://fdussert.github.io/fremkit-sietch'
 
+/**
+ * Whether a run built against this base may survive an index it could not read.
+ *
+ * It changes exactly one thing, and only ever in one direction: on the published origin
+ * "unknown" has to fail the run, because every check the build refuses to do twice rests on that
+ * answer. A development origin — a local `dist/` served over HTTP — has to be *built* before it
+ * can be served, so its first pass has nothing to read and nothing published to protect.
+ *
+ * The argument is the raw `FREMKIT_REGISTRY_BASE`, not the resolved base: naming the real origin
+ * explicitly is still the real origin, and must not buy the tolerance.
+ */
+export function toleratesMissingIndex(configuredBase: string | undefined): boolean {
+  return Boolean(configuredBase) && configuredBase !== DEFAULT_BASE_URL
+}
+
 const INDEX_TIMEOUT_MS = 20_000
 
 export class PublishedIndexError extends Error {

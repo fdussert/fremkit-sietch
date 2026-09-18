@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PublishedIndexError, indexUrl, readPublishedIndex } from '../published.js'
+import { DEFAULT_BASE_URL, PublishedIndexError, indexUrl, readPublishedIndex, toleratesMissingIndex } from '../published.js'
 
 const BASE = 'https://example.github.io/fremkit-sietch'
 const HASH = 'a'.repeat(64)
@@ -82,5 +82,21 @@ describe('readPublishedIndex', () => {
   it('names the index in every failure, so a CI log says what could not be read', async () => {
     const { fetch: doFetch } = serve('', 500)
     await expect(readPublishedIndex(BASE, doFetch)).rejects.toThrow(/could not read the published index/)
+  })
+})
+
+describe('toleratesMissingIndex', () => {
+  it('never tolerates it on the published origin', () => {
+    expect(toleratesMissingIndex(undefined)).toBe(false)
+    expect(toleratesMissingIndex('')).toBe(false)
+    // Naming the real origin explicitly is still the real origin: the tolerance is about there
+    // being nothing published to protect, not about how the base was arrived at.
+    expect(toleratesMissingIndex(DEFAULT_BASE_URL)).toBe(false)
+  })
+
+  it('tolerates it anywhere else, which is what makes the local chain buildable', () => {
+    // `dist/` has to be built before it can be served, so the first pass has nothing to read.
+    expect(toleratesMissingIndex('http://127.0.0.1:8080')).toBe(true)
+    expect(toleratesMissingIndex('https://example.com/registry')).toBe(true)
   })
 })

@@ -4,7 +4,7 @@
   "sdk": 1,
   "author": "Fremkit",
   "license": "MIT",
-  "homepage": "https://github.com/fdussert/fremkit-widgets",
+  "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Processeur, mémoire et réseau d’un NAS", "en": "CPU, memory and network of a NAS" },
   "icon": "activity", "minSize": [8, 4], "defaultSize": [12, 4],
   "compact": { "width": 5 },

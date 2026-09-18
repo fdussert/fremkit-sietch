@@ -6,7 +6,7 @@ import { RegistryIndexSchema, type RegistryIndex } from '../schema.js'
 import { renderPage } from '../page.js'
 import type { WidgetPackage } from '../validate.js'
 
-const BASE = 'https://example.github.io/fremkit-widgets'
+const BASE = 'https://example.github.io/fremkit-sietch'
 const NOW = new Date('2026-09-18T12:00:00.000Z')
 
 function pkg(over: Record<string, unknown> = {}, files?: { name: string; data: Buffer }[]): WidgetPackage {
@@ -24,7 +24,7 @@ function pkg(over: Record<string, unknown> = {}, files?: { name: string; data: B
   }
 }
 
-const opts = { registry: 'fremkit-widgets', baseUrl: BASE, now: NOW }
+const opts = { registry: 'fremkit-sietch', baseUrl: BASE, now: NOW }
 
 describe('packageZip', () => {
   it('produces the same bytes for the same folder, every time', () => {
@@ -63,7 +63,7 @@ describe('build', () => {
   it('writes an index Fremkit validates, and one zip per widget', async () => {
     const result = await build([pkg()], opts)
     expect(RegistryIndexSchema.safeParse(result.index).success).toBe(true)
-    expect(result.index.registry).toBe('fremkit-widgets')
+    expect(result.index.registry).toBe('fremkit-sietch')
     expect(result.index.schema).toBe(1)
     expect(result.index.generatedAt).toBe(NOW.toISOString())
     const w = result.index.widgets[0]

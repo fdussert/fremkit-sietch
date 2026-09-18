@@ -4,7 +4,7 @@
   "sdk": 1,
   "author": "Fremkit",
   "license": "MIT",
-  "homepage": "https://github.com/fdussert/fremkit-widgets",
+  "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Volumes, santé et température des disques d’un NAS", "en": "Volumes, disk health and temperature of a NAS" },
   "icon": "hard-drive", "minSize": [8, 4], "defaultSize": [16, 8],
   "compact": { "width": 5 },

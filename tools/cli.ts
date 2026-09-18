@@ -19,8 +19,8 @@ const WIDGETS_DIR = join(root, 'widgets')
 const DIST_DIR = join(root, 'dist')
 
 /** Who this index says it is, and where its files will live. Both are this repository's identity. */
-const REGISTRY_NAME = 'fremkit-widgets'
-const BASE_URL = process.env.REGISTRY_BASE_URL || 'https://fdussert.github.io/fremkit-widgets'
+const REGISTRY_NAME = 'fremkit-sietch'
+const BASE_URL = process.env.REGISTRY_BASE_URL || 'https://fdussert.github.io/fremkit-sietch'
 
 /** The index already on Pages, or null on the very first run — and on any failure to read it. */
 async function previousIndex(): Promise<RegistryIndex | null> {

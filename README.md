@@ -1,13 +1,15 @@
 <p align="center"><img src="https://raw.githubusercontent.com/fdussert/fremkit/main/brand/social/fremkit-social-1280x640.png" alt="Fremkit — widget dashboard for the Corsair Xeneon Edge" width="800"></p>
 
-# Fremkit widgets
+# Fremkit sietch
 
 The widget registry for [Fremkit](https://github.com/fdussert/fremkit), the widget dashboard
-for the Corsair Xeneon Edge on macOS. One folder per widget under `widgets/`; a workflow packs
+for the Corsair Xeneon Edge on macOS. A *sietch* is where the Fremen keep the tribe's reserves,
+and where a newcomer is admitted once the tribe has seen what they bring — which is what this
+repository does with widgets. One folder per widget under `widgets/`; a workflow packs
 each folder into a zip, computes its hash and publishes an `index.json` on GitHub Pages that the
 Fremkit admin browses, installs from and checks for updates against.
 
-- Registry: <https://fdussert.github.io/fremkit-widgets/index.json>
+- Registry: <https://fdussert.github.io/fremkit-sietch/index.json>
 - Writing a widget: [docs/writing-widgets.md](https://github.com/fdussert/fremkit/blob/main/docs/writing-widgets.md) in the main repository
 - Publishing one here: [CONTRIBUTING.md](CONTRIBUTING.md)
 

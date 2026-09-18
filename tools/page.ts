@@ -8,6 +8,7 @@
  */
 
 import type { IndexTheme, IndexWidget, RegistryIndex } from './schema.js'
+import { WIDGET_CATEGORIES, type WidgetCategory } from './vendor/widgets/manifest.js'
 import { COLOR_RE } from './theme.js'
 
 export function esc(value: unknown): string {
@@ -72,8 +73,29 @@ function themeCard(t: IndexTheme): string {
     </article>`
 }
 
+/** The label a shelf is headed with. Sentence case, because the heading is already uppercased. */
+const CATEGORY_LABELS: Record<WidgetCategory, string> = {
+  ai: 'AI', dev: 'Development', system: 'System', productivity: 'Productivity',
+  media: 'Media', info: 'Info', home: 'Home', other: 'Other',
+}
+
+/**
+ * The widgets as shelves, in `WIDGET_CATEGORIES` order — the same order the admin's library uses.
+ *
+ * An empty shelf is not drawn: the list of categories is fixed and most registries will only
+ * ever fill three of them, and eight headings with five blanks reads as a broken page.
+ */
+function shelves(widgets: IndexWidget[]): string {
+  return WIDGET_CATEGORIES
+    .map((key) => ({ key, rows: widgets.filter((w) => w.category === key) }))
+    .filter((shelf) => shelf.rows.length)
+    .map((shelf) => `    <h1 class="section">${esc(CATEGORY_LABELS[shelf.key])}</h1>\n`
+      + shelf.rows.map(card).join('\n'))
+    .join('\n')
+}
+
 export function renderPage(index: RegistryIndex): string {
-  const cards = index.widgets.map(card).join('\n')
+  const cards = shelves(index.widgets)
   const themes = index.themes.map(themeCard).join('\n')
   const empty = '    <p class="meta">No widget published yet.</p>'
   return `<!doctype html>
@@ -105,8 +127,7 @@ h1.section { font-size: 1.1rem; margin: 2rem 0 0; color: var(--dim); text-transf
   <main>
     <h1>Fremkit widgets</h1>
     <p class="meta">The widget registry for <a href="https://github.com/fdussert/fremkit">Fremkit</a>. Browse and install these from the Fremkit admin; the machine-readable list is <a href="index.json">index.json</a>.</p>
-    <h1 class="section">Widgets</h1>
-${index.widgets.length ? cards : empty}
+${index.widgets.length ? cards : '    <h1 class="section">Widgets</h1>\n' + empty}
     <h1 class="section">Themes</h1>
 ${index.themes.length ? themes : '    <p class="meta">No theme published yet.</p>'}
     <footer>Generated ${esc(index.generatedAt)} · schema ${esc(index.schema)} · ${index.widgets.length} widget(s) · ${index.themes.length} theme(s)</footer>

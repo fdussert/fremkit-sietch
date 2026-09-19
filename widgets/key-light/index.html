@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Key Light</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;color:var(--text,#e6e8eb);font-family:var(--font,-apple-system,system-ui,sans-serif);overflow:hidden}
+  .wrap{box-sizing:border-box;height:100%;padding:14px 18px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+  .top{display:flex;align-items:center;gap:12px}
+  .power{flex:0 0 auto;width:56px;height:56px;border:0;border-radius:28px;cursor:pointer;
+    background:#252a32;color:#8b93a0;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .power.on{background:var(--accent,#d9b36a);color:var(--on-accent,#0b0d10)}
+  .read{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .read .big{font-size:26px;font-weight:600;line-height:1.1}
+  .read .sub{font-size:13px;color:var(--text-muted,#8b93a0)}
+  .sliders{display:flex;flex-direction:column;gap:10px}
+  .line{display:flex;align-items:center;gap:10px}
+  .line .lbl{font-size:13px;color:var(--text-muted,#8b93a0);width:4.5em;flex:0 0 auto}
+  .line button{flex:0 0 auto;min-width:44px;height:44px;border:0;border-radius:8px;cursor:pointer;
+    background:#252a32;color:var(--text,#e6e8eb);font-size:20px;line-height:1}
+  .line .val{flex:1;text-align:center;font-size:16px;font-variant-numeric:tabular-nums}
+  .note{font-size:14px;color:var(--text-muted,#8b93a0);padding:14px 18px}
+  .compact{height:100%;display:flex;align-items:center;gap:8px;padding:0 4px;font-size:calc(14px * var(--text-scale,1))}
+  .compact .dot{width:10px;height:10px;border-radius:5px;background:#3a4049;flex:0 0 auto}
+  .compact .dot.on{background:var(--accent,#d9b36a)}
+</style></head>
+<body><div id="root"></div><script src="/fremkit.js"></script><script>
+(function () {
+  var L = {
+    unconfigured: { fr: 'Choisissez une lampe dans les réglages du widget.', en: 'Pick a light in the widget’s settings.' },
+    offline: { fr: 'Lampe injoignable', en: 'The light could not be reached' },
+    loading: { fr: 'Lecture…', en: 'Reading…' },
+    brightness: { fr: 'Lumière', en: 'Brightness' },
+    temperature: { fr: 'Teinte', en: 'Warmth' },
+    off: { fr: 'éteinte', en: 'off' },
+    on: { fr: 'allumée', en: 'on' }
+  }
+  function t(key) { return Fremkit.t(L[key]) }
+
+  var settings = {}
+  var light = null
+  var error = ''
+  var busy = false
+
+  /**
+   * Elgato's own scale for colour temperature: 143 is the warmest, 344 the coldest, and the
+   * number is mireds rather than kelvin. The widget shows kelvin because that is what the box
+   * says, and converts on the way in and out.
+   */
+  function kelvin(mired) { return Math.round(1000000 / mired / 50) * 50 }
+  function mired(k) { return Math.max(143, Math.min(344, Math.round(1000000 / k))) }
+
+  function step() {
+    var n = Number(settings.step)
+    return Number.isFinite(n) && n > 0 && n <= 50 ? n : 10
+  }
+
+  /**
+   * Reads the light.
+   *
+   * `conn:` is the connection this instance is bound to: the server knows which one, and a Key
+   * Light needs no key at all — what it needs is to be on the local network, which is the whole
+   * reason this connection declares `scheme: "http"`.
+   */
+  function read() {
+    return Fremkit.fetch('conn:/elgato/lights')
+      .then(function (r) { return r.json() })
+      .then(function (body) {
+        light = (body && body.lights && body.lights[0]) || null
+        error = light ? '' : 'offline'
+      })
+      .catch(function () { error = 'offline' })
+      .then(render)
+  }
+
+  function write(patch) {
+    if (!light || busy) return Promise.resolve()
+    busy = true
+    var next = { on: light.on, brightness: light.brightness, temperature: light.temperature }
+    for (var k in patch) next[k] = patch[k]
+    // Painted before the answer: a light on the LAN answers in a few milliseconds, and a button
+    // that waits for a round trip to change colour feels broken on a touch screen.
+    light = next
+    render()
+    return Fremkit.fetch('conn:/elgato/lights', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ numberOfLights: 1, lights: [next] })
+    })
+      .then(function (r) { return r.ok ? read() : Promise.reject(new Error(String(r.status))) })
+      .catch(function () { error = 'offline'; render() })
+      .then(function () { busy = false })
+  }
+
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)) }
+
+  function renderTile(root) {
+    var on = !!(light && light.on)
+    var wrap = document.createElement('div')
+    wrap.className = 'wrap'
+
+    var top = document.createElement('div')
+    top.className = 'top'
+    var power = document.createElement('button')
+    power.className = 'power' + (on ? ' on' : '')
+    power.textContent = '⏻'
+    power.setAttribute('aria-label', t(on ? 'on' : 'off'))
+    power.addEventListener('click', function () { write({ on: on ? 0 : 1 }) })
+    top.appendChild(power)
+
+    var read_ = document.createElement('div')
+    read_.className = 'read'
+    var big = document.createElement('div')
+    big.className = 'big'
+    big.textContent = on ? light.brightness + ' %' : t('off')
+    var sub = document.createElement('div')
+    sub.className = 'sub'
+    sub.textContent = light ? kelvin(light.temperature) + ' K' : ''
+    read_.appendChild(big)
+    read_.appendChild(sub)
+    top.appendChild(read_)
+    wrap.appendChild(top)
+
+    var sliders = document.createElement('div')
+    sliders.className = 'sliders'
+    sliders.appendChild(line('brightness', light ? light.brightness + ' %' : '—',
+      function (d) { write({ brightness: clamp(light.brightness + d * step(), 0, 100) }) }))
+    sliders.appendChild(line('temperature', light ? kelvin(light.temperature) + ' K' : '—',
+      function (d) { write({ temperature: mired(clamp(kelvin(light.temperature) + d * 250, 2900, 7000)) }) }))
+    wrap.appendChild(sliders)
+
+    root.appendChild(wrap)
+  }
+
+  function line(key, value, onStep) {
+    var row = document.createElement('div')
+    row.className = 'line'
+    var lbl = document.createElement('span')
+    lbl.className = 'lbl'
+    lbl.textContent = t(key)
+    var less = document.createElement('button')
+    less.textContent = '−'
+    less.addEventListener('click', function () { onStep(-1) })
+    var val = document.createElement('span')
+    val.className = 'val'
+    val.textContent = value
+    var more = document.createElement('button')
+    more.textContent = '+'
+    more.addEventListener('click', function () { onStep(1) })
+    row.appendChild(lbl); row.appendChild(less); row.appendChild(val); row.appendChild(more)
+    return row
+  }
+
+  function renderCompact(root) {
+    var on = !!(light && light.on)
+    var box = document.createElement('div')
+    box.className = 'compact'
+    var dot = document.createElement('i')
+    dot.className = 'dot' + (on ? ' on' : '')
+    var label = document.createElement('span')
+    label.textContent = on ? light.brightness + ' %' : t('off')
+    box.appendChild(dot)
+    box.appendChild(label)
+    box.addEventListener('click', function () { if (light) write({ on: on ? 0 : 1 }) })
+    root.appendChild(box)
+  }
+
+  function render() {
+    var root = document.getElementById('root')
+    root.textContent = ''
+    if (!settings.connection) { note(root, t('unconfigured')); return }
+    if (!light) { note(root, error ? t('offline') : t('loading')); return }
+    if (Fremkit.compact) renderCompact(root)
+    else renderTile(root)
+  }
+
+  function note(root, text) {
+    var p = document.createElement('div')
+    p.className = 'note'
+    p.textContent = text
+    root.appendChild(p)
+  }
+
+  Fremkit.onSettings(function (s) {
+    settings = s || {}
+    light = null
+    error = ''
+    render()
+    if (settings.connection) read()
+  })
+
+  Fremkit.whenReady(function () {
+    render()
+    if (settings.connection) read()
+    // A light somebody else switched from the Elgato app should catch up without a reload.
+    setInterval(function () { if (settings.connection && !busy) read() }, 10000)
+  })
+})()
+</script></body></html>

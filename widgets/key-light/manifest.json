@@ -1,0 +1,33 @@
+{ "id": "key-light",
+  "name": { "fr": "Key Light", "en": "Key Light" },
+  "version": "1.0.0",
+  "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
+  "description": { "fr": "Allumer, éteindre et régler une Elgato Key Light", "en": "Switch an Elgato Key Light on or off, and set it" },
+  "category": "home",
+  "icon": "sun", "minSize": [8, 4], "defaultSize": [12, 6],
+  "compact": { "width": 5 },
+  "connection": {
+    "name": { "fr": "Key Light", "en": "Key Light" },
+    "kind": "host",
+    "scheme": "http",
+    "fields": [
+      { "key": "host", "label": { "fr": "Adresse de la lampe", "en": "The light’s address" },
+        "placeholder": "192.168.1.50:9123", "required": true,
+        "help": { "fr": "L’adresse IP de la Key Light sur votre réseau, avec le port 9123.", "en": "The Key Light’s IP address on your network, with port 9123." } }
+    ],
+    "test": { "method": "GET", "path": "/elgato/accessory-info", "expect": 200 },
+    "requests": [
+      { "method": "GET", "path": "/elgato/lights", "cacheMs": 2000 },
+      { "method": "PUT", "path": "/elgato/lights" }
+    ],
+    "hint": {
+      "fr": "Une Key Light n’a ni compte ni clé : elle répond en clair à qui la joint sur le réseau local.\n\nTrouvez son adresse dans l’application Elgato Control Center (Paramètres → Réseau) ou sur votre box, puis saisissez-la ici avec le port 9123.",
+      "en": "A Key Light has no account and no key: it answers in the clear to anything that reaches it on the local network.\n\nIts address is in the Elgato Control Center app (Settings → Network), or on your router; enter it here with port 9123."
+    }
+  },
+  "settingsSchema": {
+    "connection": { "type": "connection", "connectionType": "decl:key-light:key-light",
+      "label": { "fr": "Lampe", "en": "Light" } },
+    "step": { "type": "number", "scope": "tile", "default": 10,
+      "label": { "fr": "Pas de réglage (%)", "en": "Adjustment step (%)" } }
+  } }

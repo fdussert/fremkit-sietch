@@ -1,18 +1,36 @@
 { "id": "homey-flows",
   "name": { "fr": "Flows Homey", "en": "Homey flows" },
-  "version": "1.1.1",
+  "version": "2.0.0",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Boutons pour lancer les flows d’un Homey Pro", "en": "Buttons that run the flows of a Homey Pro" },
   "category": "home",
   "icon": "play", "minSize": [8, 4], "defaultSize": [16, 8],
-  "subscriptions": ["homey:*"], "commands": ["homey:*"],
+  "connection": {
+    "name": { "fr": "Homey (flows)", "en": "Homey (flows)" },
+    "kind": "http-bearer",
+    "fields": [
+      { "key": "host", "label": { "fr": "Adresse du Homey", "en": "The Homey’s address" },
+        "placeholder": "192.168.1.20", "required": true },
+      { "key": "token", "label": { "fr": "Clé API", "en": "API key" }, "secret": true, "required": true,
+        "help": { "fr": "Un Personal Access Token avec Flow en lecture et en contrôle.", "en": "A Personal Access Token with Flow in read and control." } }
+    ],
+    "test": { "method": "GET", "path": "/api/manager/flow/flow", "expect": 200 },
+    "requests": [
+      { "method": "GET", "path": "/api/manager/flow/flow", "cacheMs": 15000 },
+      { "method": "GET", "path": "/api/manager/flow/advancedflow", "cacheMs": 15000 },
+      { "method": "POST", "path": "/api/manager/flow/flow/*/trigger" },
+      { "method": "POST", "path": "/api/manager/flow/advancedflow/*/trigger" }
+    ],
+    "hint": {
+      "fr": "Sur le Homey : Paramètres → Général → API keys → créez une clé avec les droits Flow (lecture et contrôle).\n\nL’adresse est celle du Homey sur votre réseau local. La clé ne quitte jamais votre Mac : Fremkit la garde dans le trousseau et l’envoie au Homey, à personne d’autre.",
+      "en": "On the Homey: Settings → General → API keys → create one with Flow rights (read and control).\n\nThe address is the Homey’s on your local network. The key never leaves your Mac: Fremkit keeps it in the keychain and sends it to the Homey and to nothing else."
+    }
+  },
   "settingsSchema": {
-    "connection": { "type": "connection", "connectionType": "homey",
+    "connection": { "type": "connection", "connectionType": "decl:homey-flows:homey-flows",
       "label": { "fr": "Connexion", "en": "Connection" } },
     "all": { "type": "boolean", "default": false,
       "label": { "fr": "Afficher tous les flows", "en": "Show every flow" } },
-    "flows": { "type": "pick", "connection": "connection", "source": "flows", "default": [],
-      "label": { "fr": "Flows", "en": "Flows" } },
     "folder": { "type": "string", "default": "",
       "label": { "fr": "Filtre de dossier", "en": "Folder filter" } },
     "max": { "type": "number", "default": 8,

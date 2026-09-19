@@ -50,12 +50,68 @@
   /** How long a button stays in its pressed or failed state after a tap. */
   var FEEDBACK_MS = 1200
 
-  var settings = {}, snapshot = null, unsub = null, channel = null
+  /**
+   * The flows, read by the widget itself.
+   *
+   * v1 subscribed to `homey:<id>` and let the core's Homey provider poll. v2 declares its own
+   * connection instead: the server holds the key and makes exactly the four requests this
+   * manifest lists, and the widget asks for a path. The coded `homey` type and its provider stay
+   * for `homey-devices` — this is the proof that a widget can do without one, not a migration.
+   */
+  var settings = {}, snapshot = null, loading = false
   /** flow key -> 'pressed' | 'failed', cleared by a timer. */
   var feedback = {}
 
   function lower(v) { return String(v == null ? '' : v).toLowerCase() }
   function connectionId() { return typeof settings.connection === 'string' ? settings.connection : '' }
+
+  /**
+   * Turns Homey's answer into the list this widget draws.
+   *
+   * Both endpoints answer with an object keyed by id rather than an array, and an Advanced Flow
+   * is a second collection behind a second trigger path — hence the `advanced` flag, which is
+   * also what `keyOf` puts in front of the key.
+   */
+  function toList(body, advanced) {
+    if (!body || typeof body !== 'object') return []
+    return Object.keys(body).map(function (id) {
+      var f = body[id] || {}
+      return {
+        id: id,
+        name: typeof f.name === 'string' ? f.name : id,
+        folder: typeof f.folderName === 'string' ? f.folderName : '',
+        enabled: f.enabled !== false,
+        advanced: advanced === true
+      }
+    })
+  }
+
+  /**
+   * Asks the server for both kinds of flow.
+   *
+   * `conn:` is the connection this instance is bound to. The widget names a path and nothing
+   * else: no address, no key, no connection id. A Homey with no Advanced Flows answers 404 there,
+   * which is not an error worth showing — the ordinary flows are the ones people have.
+   */
+  function read() {
+    if (!connectionId() || loading) return
+    loading = true
+    Promise.all([
+      Fremkit.fetch('conn:/api/manager/flow/flow').then(readBody).catch(function () { return null }),
+      Fremkit.fetch('conn:/api/manager/flow/advancedflow').then(readBody).catch(function () { return null })
+    ]).then(function (both) {
+      if (both[0] === null && both[1] === null) {
+        snapshot = snapshot || { flows: [] }
+        snapshot.error = 'offline'
+      } else {
+        snapshot = { flows: toList(both[0], false).concat(toList(both[1], true)), error: null }
+      }
+      loading = false
+      render()
+    })
+  }
+
+  function readBody(r) { return r.ok ? r.json() : Promise.reject(new Error(String(r.status))) }
 
   /**
    * How a flow is keyed in the settings and in the picker: an Advanced Flow carries a prefix,
@@ -96,9 +152,15 @@
   }
 
   function trigger(flow) {
-    if (!channel || flow.enabled === false) return
+    if (!connectionId() || flow.enabled === false) return
     mark(keyOf(flow), 'pressed')
-    Fremkit.sendCommand(channel, 'triggerFlow', { flowId: flow.id, advanced: flow.advanced === true })
+    var collection = flow.advanced === true ? 'advancedflow' : 'flow'
+    Fremkit.fetch('conn:/api/manager/flow/' + collection + '/' + encodeURIComponent(flow.id) + '/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    })
+      .then(function (r) { if (!r.ok) mark(keyOf(flow), 'failed') })
       .catch(function () { mark(keyOf(flow), 'failed') })
   }
 
@@ -159,18 +221,13 @@
     render()
   }
 
-  /** Only the connection touches the subscription; the filters are applied at render time. */
+  /** Only the connection changes what is read; the filters are applied at render time. */
   function applySettings(next) {
+    var before = connectionId()
     settings = next || {}
-    var id = connectionId()
-    var target = id ? 'homey:' + id : null
-    if (target !== channel) {
-      if (unsub) { unsub(); unsub = null }
-      snapshot = null; feedback = {}
-      channel = target
-      if (channel) unsub = Fremkit.subscribe(channel, function (data) { snapshot = data; render() })
-    }
+    if (connectionId() !== before) { snapshot = null; feedback = {} }
     render()
+    if (connectionId() !== before) read()
   }
 
   Fremkit.whenReady(function () {
@@ -180,5 +237,9 @@
     Fremkit.onResize(applySize)
     applySettings(Fremkit.settings)
     Fremkit.onSettings(applySettings)
+    read()
+    // A flow renamed or disabled in the Homey app should catch up without a reload. The server
+    // caches the two reads for fifteen seconds, so two of these widgets cost one poll.
+    setInterval(read, 30000)
   })
 </script></body></html>

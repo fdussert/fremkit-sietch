@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LIMITS, checkEntryName, isBilingual, isLocalName, localizedTexts, offPackageScripts, readAllPackages, readPackage } from '../validate.js'
+import { LIMITS, checkEntryName, isBilingual, isLocalName, localizedTexts, offPackageScripts, readAllPackages, readPackage, assertNoSharedIds } from '../validate.js'
 import { ManifestSchema } from '../vendor/widgets/manifest.js'
 
 let root: string
@@ -234,5 +234,20 @@ describe('readAllPackages', () => {
   })
   it('answers nothing for a folder that does not exist', async () => {
     expect(await readAllPackages(join(root, 'nope'))).toEqual([])
+  })
+})
+
+describe('assertNoSharedIds', () => {
+  it('refuses an id both a widget and a theme claim', () => {
+    // Fremkit records what is installed under one key across both kinds, so the two could never
+    // both be installed. Saying so here tells the author before the pull request is opened.
+    expect(() => assertNoSharedIds([{ id: 'nuit' }], [{ id: 'nuit' }])).toThrow(/cannot share an id/)
+    expect(() => assertNoSharedIds([{ id: 'a' }, { id: 'b' }], [{ id: 'b' }])).toThrow(/b/)
+  })
+
+  it('says nothing when the two lists are disjoint, or either is empty', () => {
+    expect(() => assertNoSharedIds([{ id: 'clock' }], [{ id: 'nuit' }])).not.toThrow()
+    expect(() => assertNoSharedIds([], [{ id: 'nuit' }])).not.toThrow()
+    expect(() => assertNoSharedIds([{ id: 'clock' }], [])).not.toThrow()
   })
 })

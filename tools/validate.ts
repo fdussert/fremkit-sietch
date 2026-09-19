@@ -299,6 +299,22 @@ export async function readAll(root: string, kind: Kind): Promise<Package[]> {
   return packages
 }
 
+/**
+ * Refuses an id that both a widget and a theme claim.
+ *
+ * Fremkit records what is installed in one map keyed by id, across both kinds — so two packages
+ * of the same name can never both be installed, whatever this repository thinks of them. The
+ * install would be refused there, on somebody's machine, after the download; this says it here,
+ * to the author, before the pull request is opened.
+ */
+export function assertNoSharedIds(widgets: { id: string }[], themes: { id: string }[]): void {
+  const widgetIds = new Set(widgets.map((w) => w.id))
+  const shared = themes.map((t) => t.id).filter((id) => widgetIds.has(id))
+  if (shared.length) {
+    throw new Error(`a widget and a theme cannot share an id: ${shared.join(', ')} — Fremkit records both under one key`)
+  }
+}
+
 /** Every widget folder in `root`, validated, in id order. */
 export async function readAllPackages(root: string): Promise<WidgetPackage[]> {
   return (await readAll(root, 'widget')) as WidgetPackage[]

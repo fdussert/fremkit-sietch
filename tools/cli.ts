@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from './build.js'
 import { renderPage } from './page.js'
-import { readAllPackages, readAllThemes } from './validate.js'
+import { assertNoSharedIds, readAllPackages, readAllThemes } from './validate.js'
 import { DEFAULT_BASE_URL, readPublishedIndex, toleratesMissingIndex } from './published.js'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -49,6 +49,7 @@ async function main(): Promise<void> {
 
   const widgets = await readAllPackages(WIDGETS_DIR)
   const themes = await readAllThemes(THEMES_DIR)
+  assertNoSharedIds(widgets, themes)
   console.log(`${widgets.length} widget folder(s) and ${themes.length} theme folder(s) validated`)
 
   // Only a 404 is survivable; see published.ts. Everything the build refuses to do twice rests

@@ -8,6 +8,7 @@
   "connection": {
     "name": { "fr": "Homey (flows)", "en": "Homey (flows)" },
     "kind": "http-bearer",
+    "scheme": "http",
     "fields": [
       { "key": "host", "label": { "fr": "Adresse du Homey", "en": "The Homey’s address" },
         "placeholder": "192.168.1.20", "required": true },
@@ -22,8 +23,8 @@
       { "method": "POST", "path": "/api/manager/flow/advancedflow/*/trigger" }
     ],
     "hint": {
-      "fr": "Sur le Homey : Paramètres → Général → API keys → créez une clé avec les droits Flow (lecture et contrôle).\n\nL’adresse est celle du Homey sur votre réseau local. La clé ne quitte jamais votre Mac : Fremkit la garde dans le trousseau et l’envoie au Homey, à personne d’autre.",
-      "en": "On the Homey: Settings → General → API keys → create one with Flow rights (read and control).\n\nThe address is the Homey’s on your local network. The key never leaves your Mac: Fremkit keeps it in the keychain and sends it to the Homey and to nothing else."
+      "fr": "Sur le Homey : Paramètres → Général → API keys → créez une clé avec les droits Flow (lecture et contrôle).\n\nL’adresse est celle du Homey sur votre réseau local. Le Homey répond en HTTP sur le réseau local : Fremkit ne l’autorise que pour une adresse privée, et jamais ailleurs.\n\nLa clé ne quitte jamais votre Mac : Fremkit la garde dans le trousseau et l’envoie au Homey, à personne d’autre.",
+      "en": "On the Homey: Settings → General → API keys → create one with Flow rights (read and control).\n\nThe address is the Homey’s on your local network. A Homey answers over plain HTTP there, which Fremkit allows for a private address and nowhere else.\n\nThe key never leaves your Mac: Fremkit keeps it in the keychain and sends it to the Homey and to nothing else."
     }
   },
   "settingsSchema": {

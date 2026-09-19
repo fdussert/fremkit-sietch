@@ -178,17 +178,25 @@
     root.appendChild(p)
   }
 
-  Fremkit.onSettings(function (s) {
-    settings = s || {}
-    light = null
-    error = ''
+  /**
+   * Takes a new settings object, and forgets what it read for the previous light.
+   *
+   * `Fremkit.onSettings` fires on *changes*; the first value is `Fremkit.settings`, already set
+   * by the time `whenReady` runs. Reading only the callback leaves the widget saying "pick a
+   * light" for ever on a tile that has one.
+   */
+  function applySettings(next) {
+    var before = settings.connection
+    settings = next || {}
+    if (settings.connection !== before) { light = null; error = '' }
     render()
     if (settings.connection) read()
-  })
+  }
+
+  Fremkit.onSettings(applySettings)
 
   Fremkit.whenReady(function () {
-    render()
-    if (settings.connection) read()
+    applySettings(Fremkit.settings)
     // A light somebody else switched from the Elgato app should catch up without a reload.
     setInterval(function () { if (settings.connection && !busy) read() }, 10000)
   })

@@ -222,6 +222,9 @@ export async function build(packages: BuildInput, opts: BuildOptions): Promise<B
         subscriptions: pkg.manifest.subscriptions,
         commands: pkg.manifest.commands,
         network: pkg.manifest.permissions.network,
+        // A permission like any other: the dialog renders it, the record stores it, and a
+        // version that changes it asks again.
+        ...(pkg.manifest.connection ? { connection: pkg.manifest.connection } : {}),
       },
       connections: connectionTypesOf(pkg),
       size: out.size,

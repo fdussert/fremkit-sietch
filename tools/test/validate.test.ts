@@ -251,3 +251,46 @@ describe('assertNoSharedIds', () => {
     expect(() => assertNoSharedIds([{ id: 'clock' }], [])).not.toThrow()
   })
 })
+
+describe('a widget that declares a connection', () => {
+  const decl = (over: Record<string, unknown> = {}) => ({
+    name: 'Key Light',
+    kind: 'host',
+    fields: [{ key: 'host', label: { fr: 'Adresse', en: 'Address' } }],
+    requests: [{ method: 'GET', path: '/elgato/lights' }],
+    ...over,
+  })
+
+  const withDecl = async (connection: unknown) => {
+    await widget('demo', {}, manifest({ id: 'demo', connection }))
+    return readPackage(root, 'demo')
+  }
+
+  it('takes one the vendored schema accepts', async () => {
+    const pkg = await withDecl(decl())
+    expect(pkg.manifest.connection?.kind).toBe('host')
+  })
+
+  it('refuses a hint over the cap', async () => {
+    // It is rendered in a dialog the user reads while deciding whether to trust the widget.
+    await expect(withDecl(decl({ hint: 'x'.repeat(2001) }))).rejects.toThrow()
+  })
+
+  it('refuses a name that belongs to a connection type Fremkit ships', async () => {
+    // The type id is namespaced whatever happens; the label is what the user reads on the form.
+    await expect(withDecl(decl({ name: 'Homey Pro' }))).rejects.toThrow()
+    await expect(withDecl(decl({ name: 'github' }))).rejects.toThrow()
+  })
+
+  it('refuses a path that is not one', async () => {
+    await expect(withDecl(decl({ requests: [{ method: 'GET', path: '/a/../b' }] }))).rejects.toThrow()
+    await expect(withDecl(decl({ requests: [{ method: 'GET', path: '/a?b=1' }] }))).rejects.toThrow()
+  })
+
+  it('refuses a header an API key has no business in', async () => {
+    await expect(withDecl(decl({
+      kind: 'api-key-header', headerName: 'Cookie',
+      fields: [{ key: 'host', label: 'A' }, { key: 'k', label: 'K', secret: true }],
+    }))).rejects.toThrow()
+  })
+})

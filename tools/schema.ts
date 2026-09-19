@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod'
-import { SEMVER_RE, WIDGET_CATEGORIES } from './vendor/widgets/manifest.js'
+import { ConnectionDeclSchema, SEMVER_RE, WIDGET_CATEGORIES } from './vendor/widgets/manifest.js'
 
 export const INDEX_SCHEMA_VERSION = 1
 
@@ -69,6 +69,12 @@ export const IndexWidgetSchema = z.object({
     subscriptions: z.array(z.string()).default([]),
     commands: z.array(z.string()).default([]),
     network: z.array(z.string()).default([]),
+    /**
+     * The connection the widget declares, copied from its manifest so the admin's consent dialog
+     * can show it before anything is downloaded. Validated with the vendored schema — the same
+     * one Fremkit applies — so an index this repository publishes is one Fremkit will accept.
+     */
+    connection: ConnectionDeclSchema.optional(),
   }),
   /** The connection types the widget's settings ask for — "needs a Synology connection". */
   connections: z.array(z.string()).default([]),

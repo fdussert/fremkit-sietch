@@ -291,7 +291,7 @@ export async function readPackage(root: string, id: string): Promise<WidgetPacka
  * The folder's changelog, parsed, or nothing when it ships none.
  *
  * Whether *this* version needs an entry is not decided here: the answer depends on what is
- * already published, which only the build knows. See `assertChangelog`.
+ * already published, which only the build knows. See `release()` in build.ts.
  */
 function changelogOf(id: string, files: PackageFile[]): ChangelogEntry[] {
   const file = files.find((f) => f.name === CHANGELOG_ENTRY)

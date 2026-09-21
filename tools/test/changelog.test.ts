@@ -44,6 +44,18 @@ describe('toPlainText', () => {
 })
 
 describe('parseChangelog', () => {
+  it('joins a bullet the author wrapped over several lines', () => {
+    const md = '## 1.1.0\n- one bullet that is\n  wrapped over two source lines.\n- a second bullet\n'
+    expect(parseChangelog(md)[0].text).toBe('one bullet that is wrapped over two source lines.\na second bullet')
+  })
+
+  it('never exceeds the cap, ellipsis included', () => {
+    const md = `## 1.0.0\n- ${'x'.repeat(MAX_CHANGES + 100)}\n`
+    const text = parseChangelog(md)[0].text
+    expect(text.length).toBeLessThanOrEqual(MAX_CHANGES)
+    expect(text.endsWith('…')).toBe(true)
+  })
+
   const FILE = `# Changelog
 
 Anything before the first version heading belongs to nobody.

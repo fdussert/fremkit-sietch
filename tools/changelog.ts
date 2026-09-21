@@ -54,6 +54,30 @@ export function toPlainText(markdown: string): string {
     .join('\n')
 }
 
+/**
+ * A bullet wrapped over several source lines is one line here.
+ *
+ * Authors hard-wrap at eighty columns; the admin shows the text with `white-space: pre-wrap`
+ * and a two-line clamp, so a wrap that survived would fill the clamp with half a sentence and
+ * read as two bullets. A new line starts only where the author started one: a bullet marker, a
+ * numbered item, a heading — anything else continues the line before it.
+ */
+export function joinWrapped(markdown: string): string {
+  const out: string[] = []
+  for (const raw of markdown.split('\n')) {
+    const line = raw.trim()
+    if (line === '') { out.push(''); continue }
+    const startsBlock = /^(?:[-*+]|\d+\.)\s+/.test(line) || /^#{1,6}\s+/.test(line) || /^>/.test(line) || /^```/.test(line)
+    const previous = out[out.length - 1]
+    if (!startsBlock && previous !== undefined && previous !== '' && !/^```/.test(previous)) {
+      out[out.length - 1] = `${previous} ${line}`
+    } else {
+      out.push(line)
+    }
+  }
+  return out.join('\n')
+}
+
 /** One version's entry, as the file holds it. */
 export interface ChangelogEntry { version: string; text: string }
 
@@ -67,7 +91,7 @@ export function parseChangelog(markdown: string): ChangelogEntry[] {
   const out: ChangelogEntry[] = []
   let current: { version: string; lines: string[] } | null = null
   const flush = (): void => {
-    if (current) out.push({ version: current.version, text: capped(toPlainText(current.lines.join('\n'))) })
+    if (current) out.push({ version: current.version, text: capped(toPlainText(joinWrapped(current.lines.join('\n')))) })
   }
   for (const line of markdown.split('\n')) {
     const heading = HEADING.exec(line.trim())
@@ -92,7 +116,9 @@ export function parseChangelog(markdown: string): ChangelogEntry[] {
  */
 function capped(text: string): string {
   if (text.length <= MAX_CHANGES) return text
-  const cut = text.slice(0, MAX_CHANGES)
+  // One short of the cap: the ellipsis is a character too, and the index schema holds the
+  // field to the cap exactly.
+  const cut = text.slice(0, MAX_CHANGES - 1)
   const boundary = Math.max(cut.lastIndexOf(' '), cut.lastIndexOf('\n'))
   return `${(boundary > MAX_CHANGES * 0.6 ? cut.slice(0, boundary) : cut).trimEnd()}…`
 }

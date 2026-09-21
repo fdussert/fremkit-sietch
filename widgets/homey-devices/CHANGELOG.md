@@ -4,6 +4,12 @@ What changed for the person using this widget, version by version. The format fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the newest version is first, and the
 entry of the version being published is what the Fremkit admin shows before an update.
 
+## 1.1.2 — 2026-09-21
+
+### Changed
+- Says "API key refused" when the Homey answers 401, instead of "Homey offline": the Homey is
+  there, what it wants is a new key.
+
 ## 1.1.1 — 2026-09-18
 
 ### Changed

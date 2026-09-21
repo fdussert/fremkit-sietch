@@ -280,6 +280,12 @@ describe('a widget that declares a connection', () => {
     // The type id is namespaced whatever happens; the label is what the user reads on the form.
     await expect(withDecl(decl({ name: 'Homey Pro' }))).rejects.toThrow()
     await expect(withDecl(decl({ name: 'github' }))).rejects.toThrow()
+    // The ids too, and whatever case or punctuation they are dressed up in.
+    for (const name of ['homey', 'Homey', 'Home-y', 'bambu', 'azure-devops', 'ics']) {
+      await expect(withDecl(decl({ name })), name).rejects.toThrow()
+    }
+    // A name that merely mentions one is honest and stays allowed.
+    await expect(withDecl(decl({ name: 'Homey Flows' }))).resolves.toBeTruthy()
   })
 
   it('refuses a path that is not one', async () => {

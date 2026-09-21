@@ -66,7 +66,7 @@
     noConnection: { fr: 'Aucun Homey sélectionné', en: 'No Homey selected' },
     loading: { fr: 'Chargement…', en: 'Loading…' },
     empty: { fr: 'Aucun appareil correspondant', en: 'No matching device' },
-    pickSome: { fr: 'Cochez des appareils dans les réglages', en: 'Pick devices in the widget settings' },
+    pickSome: { fr: 'Ajoutez des identifiants d’appareils dans les réglages, ou cochez « tous »', en: 'Add device ids in the widget settings, or tick “every device”' },
     offline: { fr: 'Homey hors ligne', en: 'Homey offline' },
     unauthorized: { fr: 'Clé API refusée — vérifiez la connexion', en: 'API key refused — check the connection' },
     unconfigured: { fr: 'Homey non configuré', en: 'Homey not configured' },
@@ -93,22 +93,125 @@
   /** How long an optimistic value survives before the snapshot has the last word. */
   var PENDING_MS = 4000
 
-  var settings = {}, size = null, snapshot = null, unsub = null, channel = null
+  /**
+   * The devices, read by the widget itself.
+   *
+   * v1 subscribed to `homey:<id>` and let the core's Homey provider poll behind a connection type
+   * written into Fremkit. v2 declares its own connection: the server holds the key and makes
+   * exactly the three requests this manifest lists, and the widget asks for a path. One coded
+   * type fewer in the core, and — because the declaration is the same shape as the one
+   * `homey-flows` makes — one Homey key for both widgets instead of two.
+   */
+  var settings = {}, size = null, snapshot = null, loading = false
   /** deviceId + '/' + capability -> { value, until }: what was just tapped, before the next poll. */
   var pending = {}
+  /** Zone id -> name, read once in a while: zones are renamed about as often as rooms are. */
+  var zones = {}
 
   function lower(v) { return String(v == null ? '' : v).toLowerCase() }
 
   function connectionId() { return typeof settings.connection === 'string' ? settings.connection : '' }
 
   /**
-   * The device ids ticked in the settings. Anything that is not a string is dropped: an instance
-   * configured before `devices` became a picker still holds rows of typed names, and a stale row
-   * must leave the widget empty-handed rather than break it.
+   * The device ids the settings name.
+   *
+   * Two shapes on purpose. `deviceIds` is the v2 list of rows, typed by hand: a declared
+   * connection cannot feed a `pick`, because the picker's options come from a coded connection
+   * type and a declaration has none. `devices` is what v1's picker left behind, a plain array of
+   * ids — still read, so an instance that was configured before this keeps showing the same
+   * devices until somebody edits the list.
    */
   function wanted() {
-    var list = Array.isArray(settings.devices) ? settings.devices : []
-    return list.filter(function (v) { return typeof v === 'string' && v !== '' })
+    var rows = Array.isArray(settings.deviceIds) ? settings.deviceIds : []
+    var out = rows.map(function (r) { return r && typeof r.id === 'string' ? r.id.trim() : '' })
+    var legacy = Array.isArray(settings.devices) ? settings.devices : []
+    legacy.forEach(function (v) { if (typeof v === 'string') out.push(v.trim()) })
+    return out.filter(function (v) { return v !== '' })
+  }
+
+  /** Capabilities worth drawing. Mirrors `keepsCapability` in Fremkit's old Homey provider. */
+  function keeps(id) {
+    return id === 'onoff' || id === 'dim' || id === 'target_temperature' ||
+      id.indexOf('measure_') === 0 || id.indexOf('alarm_') === 0
+  }
+
+  /** A Homey collection comes back keyed by id; an older firmware answered with an array. */
+  function collection(json) {
+    if (Array.isArray(json)) return json.filter(function (e) { return e && typeof e === 'object' })
+    if (json && typeof json === 'object') {
+      return Object.keys(json).map(function (k) { return json[k] })
+        .filter(function (e) { return e && typeof e === 'object' })
+    }
+    return []
+  }
+
+  function oneCapability(id, raw) {
+    var o = raw && typeof raw === 'object' ? raw : {}
+    var v = o.value
+    var cap = { id: id, value: (typeof v === 'boolean' || typeof v === 'number' || typeof v === 'string') ? v : null }
+    // The Homey writes the unit as `units`; `unit` is accepted too, in case a firmware differs.
+    var unit = o.units == null ? o.unit : o.units
+    if (typeof unit === 'string' && unit) cap.unit = unit
+    return cap
+  }
+
+  /** `GET /api/manager/devices/device` → the list this widget draws, zone names filled in. */
+  function toDevices(json) {
+    var out = collection(json).map(function (raw) {
+      if (typeof raw.id !== 'string') return null
+      var caps = raw.capabilitiesObj && typeof raw.capabilitiesObj === 'object' ? raw.capabilitiesObj : {}
+      var zoneName = typeof raw.zoneName === 'string' && raw.zoneName
+        ? raw.zoneName
+        : (typeof raw.zone === 'string' && zones[raw.zone] ? zones[raw.zone] : '')
+      return {
+        id: raw.id,
+        name: typeof raw.name === 'string' ? raw.name : raw.id,
+        zoneName: zoneName,
+        // Absent means available: only an explicit `false` marks a device as unreachable.
+        available: raw.available !== false,
+        capabilities: Object.keys(caps).filter(keeps).sort().map(function (k) { return oneCapability(k, caps[k]) })
+      }
+    }).filter(Boolean)
+    out.sort(function (a, b) { return a.zoneName.localeCompare(b.zoneName) || a.name.localeCompare(b.name) })
+    return out
+  }
+
+  function readBody(r) {
+    if (r.ok) return r.json()
+    // A refused key is worth saying out loud; anything else is one failed read.
+    var err = new Error(String(r.status))
+    err.status = r.status
+    throw err
+  }
+
+  /**
+   * Asks the server for the devices, and now and then for the zone names.
+   *
+   * `conn:` is the connection this instance is bound to. The widget names a path and nothing
+   * else: no address, no key, no connection id. A firmware that does not serve zones costs a
+   * label, not the list — exactly as the core's poll treated it.
+   */
+  function read() {
+    if (!connectionId() || loading) return
+    loading = true
+    Fremkit.fetch('conn:/api/manager/zones/zone')
+      .then(readBody)
+      .then(function (json) {
+        var map = {}
+        collection(json).forEach(function (z) { if (typeof z.id === 'string' && typeof z.name === 'string') map[z.id] = z.name })
+        zones = map
+      })
+      .catch(function () { /* a label, not the list */ })
+      .then(function () { return Fremkit.fetch('conn:/api/manager/devices/device').then(readBody) })
+      .then(function (json) {
+        snapshot = { devices: toDevices(json), error: null }
+      })
+      .catch(function (err) {
+        snapshot = snapshot || { devices: [] }
+        snapshot.error = err && (err.status === 401 || err.status === 403) ? 'unauthorized'
+          : (err && err.message === 'unconfigured' ? 'unconfigured' : 'offline')
+      })
+      .then(function () { loading = false; render() })
   }
 
   function capability(device, id) {
@@ -163,12 +266,26 @@
     return null
   }
 
+  /**
+   * Writes one capability, through the one PUT path the manifest declared.
+   *
+   * v1 sent a `setCapability` command and the core's provider decided whether that capability
+   * could be written. The allow-list is now the declaration itself: this widget may PUT to a
+   * device's capability and to nothing else on that Homey, whatever it asks for.
+   */
   function send(device, cap, value) {
-    if (!channel) return
-    pending[device.id + '/' + cap.id] = { value: value, until: Date.now() + PENDING_MS }
+    if (!connectionId()) return
+    var key = device.id + '/' + cap.id
+    pending[key] = { value: value, until: Date.now() + PENDING_MS }
     render()
-    Fremkit.sendCommand(channel, 'setCapability', { deviceId: device.id, capability: cap.id, value: value })
-      .catch(function () { delete pending[device.id + '/' + cap.id]; render() })
+    Fremkit.fetch('conn:/api/manager/devices/device/' + encodeURIComponent(device.id) +
+      '/capability/' + encodeURIComponent(cap.id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: value })
+    })
+      .then(function (r) { if (!r.ok) { delete pending[key]; render() } else { read() } })
+      .catch(function () { delete pending[key]; render() })
   }
 
   function toggleFor(device, cap) {
@@ -297,19 +414,16 @@
     render()
   }
 
-  /** Only the connection touches the subscription; the filters are applied at render time. */
+  /** Only the connection changes what is read; the filters are applied at render time. */
   function applySettings(next) {
+    var before = connectionId()
     settings = next || {}
-    var id = connectionId()
-    var target = id ? 'homey:' + id : null
-    if (target !== channel) {
-      if (unsub) { unsub(); unsub = null }
+    if (connectionId() !== before) {
       // The devices of a Homey that was unselected are not this widget's business any more.
-      snapshot = null; pending = {}
-      channel = target
-      if (channel) unsub = Fremkit.subscribe(channel, function (data) { snapshot = data; pending = {}; render() })
+      snapshot = null; pending = {}; zones = {}
     }
     render()
+    if (connectionId() !== before) read()
   }
 
   Fremkit.whenReady(function () {
@@ -319,5 +433,9 @@
     Fremkit.onResize(applySize)
     applySettings(Fremkit.settings)
     Fremkit.onSettings(applySettings)
+    read()
+    // A lamp switched on from a wall button should catch up without a reload. The server caches
+    // the device read for fourteen seconds, so a tile and the bar's popover cost one poll.
+    setInterval(read, 15000)
   })
 </script></body></html>

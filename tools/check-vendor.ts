@@ -25,7 +25,7 @@ const root = fileURLToPath(new URL('..', import.meta.url))
  * answer: are these copies the ones that were taken. Bumping it is part of the commit that
  * copies new files over, and that commit is where the decision belongs.
  */
-const VENDOR_REF = '2a164963a3b7937fa447ee0f124fb853e446d0b5'
+const VENDOR_REF = '6c3f22fe628b1fa993a1a92cf05a7bf1dcc38a60'
 
 /**
  * Where the upstream files are read from. The default is the raw view of the pinned commit,

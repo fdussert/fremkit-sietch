@@ -32,6 +32,18 @@ function permissions(w: IndexWidget): string {
   return bits.length ? bits.join(' · ') : 'no permissions'
 }
 
+/**
+ * What the latest version changed, as the index carries it.
+ *
+ * Escaped like everything else on this page, and with its newlines kept: the entry is plain
+ * text extracted from a file somebody wrote in a pull request, and this page is published under
+ * the owner's github.io origin.
+ */
+function changes(entry: { changes?: string; version: string }): string {
+  if (!entry.changes) return ''
+  return `      <p class="changes">${esc(entry.changes)}</p>`
+}
+
 function card(w: IndexWidget): string {
   const meta = [w.author, w.license].filter(Boolean).map((v) => esc(v)).join(' · ')
   const home = w.homepage ? ` · <a href="${esc(w.homepage)}" rel="noopener noreferrer">homepage</a>` : ''
@@ -39,6 +51,7 @@ function card(w: IndexWidget): string {
       <h2>${esc(text(w.name))} <span class="v">${esc(w.version)}</span></h2>
       <p>${esc(text(w.description))}</p>
       <p class="perm">${esc(permissions(w))}</p>
+${changes(w)}
       <p class="meta">${meta}${home} · sdk ${esc(w.sdk)} · <a href="${esc(w.url)}">${esc(w.id)}-${esc(w.version)}.zip</a> (${esc(w.size)} bytes)</p>
     </article>`
 }
@@ -69,6 +82,7 @@ function themeCard(t: IndexTheme): string {
       <h2>${esc(text(t.name))} <span class="v">${esc(t.version)}</span></h2>
       <p class="strip">${swatches(t)}</p>
       <p>${esc(text(t.description))}</p>
+${changes(t)}
       <p class="meta">${meta}${home} · <a href="${esc(t.url)}">${esc(t.id)}-${esc(t.version)}.zip</a> (${esc(t.size)} bytes)</p>
     </article>`
 }
@@ -121,6 +135,9 @@ footer { margin-top: 2rem; color: var(--dim); font-size: .85rem; }
 h1.section { font-size: 1.1rem; margin: 2rem 0 0; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
 .strip { display: flex; gap: 4px; margin: .35rem 0 .5rem; }
 .sw { width: 26px; height: 18px; border-radius: 4px; border: 1px solid var(--line); }
+/* The author's own words, newlines and all; never rendered as markup. */
+.changes { white-space: pre-wrap; color: var(--fg); font-size: .9rem;
+  border-left: 2px solid var(--line); padding-left: .75rem; margin: .5rem 0; }
 </style>
 </head>
 <body>

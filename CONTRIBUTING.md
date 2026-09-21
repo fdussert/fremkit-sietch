@@ -14,6 +14,28 @@
 A new version is the same pull request with `version` bumped. A version that asks for a
 permission the previous one did not is shown to every user as a new consent.
 
+**Every new version needs a line in `CHANGELOG.md`**, beside the manifest:
+
+```markdown
+## 1.1.0 — 2026-09-21
+
+### Added
+- A setting for the refresh interval.
+```
+
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) shape: `## <version>` headings, newest
+first, optional `###` subsections, bullets. The CI refuses a version with no entry for it — the
+first release included, where "Initial release" is a perfectly good line.
+
+The entry is what the Fremkit admin shows somebody before they press Update, so write it for
+them rather than for a reviewer: what changed for a person looking at the tile. The registry
+lifts it into `index.json` as **plain text** (markdown stripped, links lose their URL, 500
+characters), so a long entry is cut on the card and stays whole in the file.
+
+The file is *not* part of the package — it is never zipped, and the bytes of a version do not
+change when you write its entry. That is deliberate: you can document a release that went out
+months ago by adding a heading for it, and nothing is republished.
+
 Reviews look at what the widget asks for and what it does with remote data (escape it with
 `Fremkit.esc`), not at taste. Security concerns: see [SECURITY.md](SECURITY.md).
 
@@ -33,6 +55,9 @@ consent to. It is the easiest thing to publish here and the safest thing to inst
 
 `fremkit` and `edge` ship with Fremkit so a fresh install has a choice with no network; those
 two ids are refused here.
+
+A theme folder holds `theme.json`, and at most a `README.md` and a `CHANGELOG.md`. The changelog
+rule is the widget's: every new version needs an entry, and the file is never packed.
 
 The four tokens `accent`, `bg`, `surface` and `text` are published in the index, which is what
 the admin paints as a swatch strip — so a theme needs no preview image. They are the only four

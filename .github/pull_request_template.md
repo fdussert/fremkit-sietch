@@ -4,6 +4,8 @@
 **Widget**: `<id>` — version `<x.y.z>`
 
 - [ ] New widget / [ ] new version of one already published (version bumped, never reused)
+- [ ] `CHANGELOG.md` has an entry for this exact version, written for the person who will read
+      it in the admin before pressing Update
 - [ ] `id` matches the folder name, and is not the id of a Fremkit built-in
 - [ ] Every channel, command and network host the widget uses is declared, and nothing else is
 - [ ] `sdk` is the bridge generation it needs, and it runs on a Fremkit that has it

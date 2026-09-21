@@ -300,14 +300,16 @@ describe('a widget that declares a connection', () => {
 
   it('refuses a name that belongs to a connection type Fremkit ships', async () => {
     // The type id is namespaced whatever happens; the label is what the user reads on the form.
-    await expect(withDecl(decl({ name: 'Homey Pro' }))).rejects.toThrow()
+    await expect(withDecl(decl({ name: 'Bambu Lab' }))).rejects.toThrow()
     await expect(withDecl(decl({ name: 'github' }))).rejects.toThrow()
     // The ids too, and whatever case or punctuation they are dressed up in.
-    for (const name of ['homey', 'Homey', 'Home-y', 'bambu', 'azure-devops', 'ics']) {
+    for (const name of ['bambu', 'Bambu', 'Bam-bu', 'synology', 'azure-devops', 'ics']) {
       await expect(withDecl(decl({ name })), name).rejects.toThrow()
     }
-    // A name that merely mentions one is honest and stays allowed.
-    await expect(withDecl(decl({ name: 'Homey Flows' }))).resolves.toBeTruthy()
+    // A name that merely mentions one is honest and stays allowed. `Homey` is plain allowed
+    // now: Fremkit removed its coded Homey type, so both Homey widgets declare their own.
+    await expect(withDecl(decl({ name: 'Bambu print' }))).resolves.toBeTruthy()
+    await expect(withDecl(decl({ name: 'Homey' }))).resolves.toBeTruthy()
   })
 
   it('refuses a path that is not one', async () => {

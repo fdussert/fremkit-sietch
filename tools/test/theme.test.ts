@@ -19,10 +19,18 @@ const theme = (over: Record<string, unknown> = {}): Record<string, unknown> => (
   ...over,
 })
 
+/**
+ * A theme folder. It gets a changelog documenting its own version unless `extra` names one:
+ * publishing a new version without an entry is refused, and that rule has its own tests.
+ */
 async function folder(id: string, file: unknown = theme({ id }), extra: Record<string, string> = {}): Promise<void> {
   await mkdir(join(root, id), { recursive: true })
   if (file !== undefined) {
     await writeFile(join(root, id, 'theme.json'), typeof file === 'string' ? file : JSON.stringify(file))
+  }
+  const version = typeof file === 'object' && file !== null ? (file as { version?: string }).version : undefined
+  if (!('CHANGELOG.md' in extra) && version) {
+    await writeFile(join(root, id, 'CHANGELOG.md'), `## ${version}\n\n- Something changed.\n`)
   }
   for (const [name, body] of Object.entries(extra)) await writeFile(join(root, id, name), body)
 }
@@ -40,14 +48,23 @@ describe('readThemePackage', () => {
     const pkg = await readThemePackage(root, 'nuit')
     expect(pkg.kind).toBe('theme')
     expect(pkg.version).toBe('1.0.0')
-    expect(pkg.files.map((f) => f.name)).toEqual(['theme.json'])
+    expect(pkg.files.map((f) => f.name)).toEqual(['CHANGELOG.md', 'theme.json'])
+    expect(pkg.changelog).toEqual([{ version: '1.0.0', text: 'Something changed.' }])
     // Every token is carried, not only the four the card paints.
     expect(pkg.theme.tokens.border).toBe('#1f2329')
   })
 
-  it('allows a README beside it and nothing else', async () => {
-    await folder('nuit', theme({ id: 'nuit' }), { 'README.md': 'why this theme exists' })
-    expect((await readThemePackage(root, 'nuit')).files.map((f) => f.name)).toEqual(['README.md', 'theme.json'])
+  it('allows a README and a CHANGELOG beside it, and nothing else', async () => {
+    await folder('nuit', theme({ id: 'nuit' }), {
+      'README.md': 'why this theme exists',
+      'CHANGELOG.md': '## 1.0.0\n\n- First one.\n',
+    })
+    expect((await readThemePackage(root, 'nuit')).files.map((f) => f.name))
+      .toEqual(['CHANGELOG.md', 'README.md', 'theme.json'])
+
+    // The changelog is read but never packed, so a theme folder holds three files and
+    // publishes two.
+    expect((await readThemePackage(root, 'nuit')).changelog).toEqual([{ version: '1.0.0', text: 'First one.' }])
 
     await folder('autre', theme({ id: 'autre' }), { 'preview.png': 'not really a png' })
     await expect(readThemePackage(root, 'autre')).rejects.toThrow(/at most a README/)

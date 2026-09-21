@@ -252,6 +252,28 @@ describe('assertNoSharedIds', () => {
   })
 })
 
+describe('the changelog a folder may ship', () => {
+  it('reads it, and every version it documents', async () => {
+    await widget('demo', { 'CHANGELOG.md': '## 1.1.0\n- newer\n\n## 1.0.0\n- older' })
+    const pkg = await readPackage(root, 'demo')
+    expect(pkg.changelog).toEqual([
+      { version: '1.1.0', text: 'newer' },
+      { version: '1.0.0', text: 'older' },
+    ])
+  })
+
+  it('leaves the list empty when the folder ships none', async () => {
+    await widget('demo')
+    expect((await readPackage(root, 'demo')).changelog).toEqual([])
+  })
+
+  it('refuses a file that documents one version twice', async () => {
+    // Which of the two is the entry? Rather than pick, say so.
+    await widget('demo', { 'CHANGELOG.md': '## 1.0.0\n- one\n\n## 1.0.0\n- two' })
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/documents 1\.0\.0 twice/)
+  })
+})
+
 describe('a widget that declares a connection', () => {
   const decl = (over: Record<string, unknown> = {}) => ({
     name: 'Key Light',

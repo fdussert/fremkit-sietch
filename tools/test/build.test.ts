@@ -9,7 +9,15 @@ import type { WidgetPackage } from '../validate.js'
 const BASE = 'https://example.github.io/fremkit-sietch'
 const NOW = new Date('2026-09-18T12:00:00.000Z')
 
-function pkg(over: Record<string, unknown> = {}, files?: { name: string; data: Buffer }[]): WidgetPackage {
+/**
+ * A package. Its changelog documents its own version by default, because a version with no
+ * entry is refused — that rule has its own tests further down.
+ */
+function pkg(
+  over: Record<string, unknown> = {},
+  files?: { name: string; data: Buffer }[],
+  changelog?: { version: string; text: string }[],
+): WidgetPackage {
   const manifest = ManifestSchema.parse({
     id: 'demo', name: { fr: 'Démo', en: 'Demo' }, description: { fr: 'D', en: 'D' },
     version: '1.0.0', sdk: 1, minSize: [8, 4], defaultSize: [8, 4], ...over,
@@ -23,6 +31,7 @@ function pkg(over: Record<string, unknown> = {}, files?: { name: string; data: B
       { name: 'index.html', data: Buffer.from('<html></html>') },
       { name: 'manifest.json', data: Buffer.from('{}') },
     ],
+    changelog: changelog ?? [{ version: manifest.version, text: 'What this version changed.' }],
   }
 }
 
@@ -150,7 +159,12 @@ describe('build', () => {
     expect(fetched).toEqual([`${BASE}/widgets/demo-1.0.0.zip`])
     expect([...next.files.keys()].sort()).toEqual(['index.json', 'widgets/demo-1.0.0.zip', 'widgets/demo-1.1.0.zip'])
     expect(next.index.widgets[0].previous).toEqual([
-      { version: '1.0.0', url: `${BASE}/widgets/demo-1.0.0.zip`, sha256: previous.widgets[0].sha256, size: previous.widgets[0].size },
+      {
+        version: '1.0.0', url: `${BASE}/widgets/demo-1.0.0.zip`,
+        sha256: previous.widgets[0].sha256, size: previous.widgets[0].size,
+        // The entry 1.0.0 went out with, kept so the history does not go blank on an update.
+        changes: 'What this version changed.',
+      },
     ])
   })
 
@@ -256,5 +270,134 @@ describe('renderPage', () => {
   })
   it('says so when the registry is empty', async () => {
     expect(renderPage((await build([], opts)).index)).toContain('No widget published yet')
+  })
+})
+
+describe('the changelog a release must carry', () => {
+  it('refuses a new version with no entry, naming the version', async () => {
+    // A release nobody described is a release the person updating cannot judge.
+    await expect(build([pkg({}, undefined, [])], opts))
+      .rejects.toThrow(/CHANGELOG\.md has no entry for 1\.0\.0/)
+  })
+
+  it('refuses an entry written for another version', async () => {
+    await expect(build([pkg({}, undefined, [{ version: '0.9.0', text: 'old news' }])], opts))
+      .rejects.toThrow(/no entry for 1\.0\.0/)
+  })
+
+  it('refuses a heading with nothing under it', async () => {
+    await expect(build([pkg({}, undefined, [{ version: '1.0.0', text: '' }])], opts))
+      .rejects.toThrow(/no entry for 1\.0\.0/)
+  })
+
+  it('writes the entry into the index', async () => {
+    const result = await build([pkg({}, undefined, [{ version: '1.0.0', text: 'Initial release.' }])], opts)
+    expect(result.index.widgets[0].changes).toBe('Initial release.')
+  })
+
+  it('asks nothing of a version that is already published', async () => {
+    // Its bytes are frozen and the entry it went out with is already in the index; a republish
+    // of the same version is not a release.
+    const first = await build([pkg()], opts)
+    const again = await build([pkg({}, undefined, [])], { ...opts, previous: first.index })
+    expect(again.index.widgets[0].changes).toBe('What this version changed.')
+  })
+
+  it('lets a package document a past release without being repacked', async () => {
+    // The bytes of 1.0.0 are frozen on Pages; the folder is the only place an author can write
+    // down what it changed, and `build` matches it by version.
+    const first = await build([pkg({}, undefined, [{ version: '1.0.0', text: 'First.' }])], opts)
+    const second = await build(
+      [pkg({ version: '1.1.0' }, undefined, [
+        { version: '1.1.0', text: 'Second.' },
+        { version: '1.0.0', text: 'First, written down later.' },
+      ])],
+      { ...opts, previous: first.index, fetchPublished: async () => first.files.get('widgets/demo-1.0.0.zip')! },
+    )
+    expect(second.index.widgets[0].changes).toBe('Second.')
+    expect(second.index.widgets[0].previous[0].changes).toBe('First, written down later.')
+  })
+
+  it('carries an older entry forward from the published index', async () => {
+    // The package for 1.0.0 is not in the checkout any more, so the index is where its entry
+    // lives. Losing it on every update would make the history blank after one release.
+    const first = await build([pkg({}, undefined, [{ version: '1.0.0', text: 'First.' }])], opts)
+    const second = await build(
+      [pkg({ version: '1.1.0' }, undefined, [{ version: '1.1.0', text: 'Second.' }])],
+      { ...opts, previous: first.index, fetchPublished: async () => first.files.get('widgets/demo-1.0.0.zip')! },
+    )
+    expect(second.index.widgets[0].previous[0]).toMatchObject({ version: '1.0.0', changes: 'First.' })
+  })
+
+  it('reads an index published before changelogs existed', async () => {
+    // Optional in the schema for exactly this: the first build after the feature lands has a
+    // `previous` with no `changes` anywhere in it.
+    const first = await build([pkg()], opts)
+    const older = {
+      ...first.index,
+      widgets: first.index.widgets.map((w) => { const { changes, ...rest } = w; return rest }),
+    }
+    const second = await build(
+      [pkg({ version: '1.1.0' }, undefined, [{ version: '1.1.0', text: 'Second.' }])],
+      { ...opts, previous: RegistryIndexSchema.parse(older), fetchPublished: async () => first.files.get('widgets/demo-1.0.0.zip')! },
+    )
+    expect(second.index.widgets[0].changes).toBe('Second.')
+    expect(second.index.widgets[0].previous[0].changes).toBeUndefined()
+  })
+})
+
+describe('the page', () => {
+  it('shows what the latest version changed, under the card', async () => {
+    const result = await build([pkg({}, undefined, [{ version: '1.0.0', text: 'Added a thing.' }])], opts)
+    expect(renderPage(result.index)).toContain('Added a thing.')
+  })
+
+  it('escapes it like everything else an author wrote', async () => {
+    // It is plain text by the time it gets here, but this page is published under the owner's
+    // origin and the entry came from a pull request.
+    const result = await build([pkg({}, undefined, [{ version: '1.0.0', text: '<img src=x onerror=alert(1)>' }])], opts)
+    const html = renderPage(result.index)
+    expect(html).not.toContain('<img src=x')
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+  })
+
+  it('leaves the card alone when a published version documented nothing', async () => {
+    const first = await build([pkg()], opts)
+    const older = {
+      ...first.index,
+      widgets: first.index.widgets.map((w) => { const { changes, ...rest } = w; return rest }),
+    }
+    expect(renderPage(RegistryIndexSchema.parse(older))).not.toContain('class="changes"')
+  })
+})
+
+describe('a changelog is not part of the package', () => {
+  it('leaves the bytes of a version alone when its entry is written', async () => {
+    // The rule everything here rests on is "the same version is the same bytes". Were the file
+    // inside the archive, documenting a release already published would break it — and the
+    // whole point is that an author can write down the history of a package long after it went
+    // out, without repacking any of it.
+    const bare = await build([pkg({}, [
+      { name: 'index.html', data: Buffer.from('<html></html>') },
+      { name: 'manifest.json', data: Buffer.from('{}') },
+    ])], opts)
+    const withLog = await build([pkg({}, [
+      { name: 'CHANGELOG.md', data: Buffer.from('## 1.0.0\n\n- Written down later.\n') },
+      { name: 'index.html', data: Buffer.from('<html></html>') },
+      { name: 'manifest.json', data: Buffer.from('{}') },
+    ])], opts)
+
+    expect(withLog.index.widgets[0].sha256).toBe(bare.index.widgets[0].sha256)
+    expect(withLog.index.widgets[0].size).toBe(bare.index.widgets[0].size)
+  })
+
+  it('is absent from the archive that is published', async () => {
+    const result = await build([pkg({}, [
+      { name: 'CHANGELOG.md', data: Buffer.from('## 1.0.0\n\n- A thing.\n') },
+      { name: 'index.html', data: Buffer.from('<html></html>') },
+      { name: 'manifest.json', data: Buffer.from('{}') },
+    ])], opts)
+    const names = readZip(result.files.get('widgets/demo-1.0.0.zip')!).map((e) => e.name)
+    expect(names).toEqual(['index.html', 'manifest.json'])
   })
 })

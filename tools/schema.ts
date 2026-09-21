@@ -13,6 +13,7 @@
 
 import { z } from 'zod'
 import { ConnectionDeclSchema, SEMVER_RE, WIDGET_CATEGORIES } from './vendor/widgets/manifest.js'
+import { MAX_CHANGES } from './changelog.js'
 
 export const INDEX_SCHEMA_VERSION = 1
 
@@ -33,11 +34,28 @@ const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/)
  */
 const PackageUrl = z.url()
 
+/**
+ * A changelog entry as the index carries it.
+ *
+ * Capped here as well as when it is extracted: an index is data from the network on the other
+ * side, and Fremkit's own copy of this schema holds it to the same ceiling.
+ */
+const ChangesSchema = z.string().max(MAX_CHANGES)
+
 const DownloadSchema = z.object({
   version: z.string().regex(SEMVER_RE),
   url: PackageUrl,
   sha256: Sha256Schema,
   size: z.number().int().min(1),
+  /**
+   * What that version changed, as plain text.
+   *
+   * Carried forward from the previously published index rather than re-read from the package,
+   * because the package for an older release is not in this checkout any more — its bytes are
+   * frozen on Pages. Optional, because an index published before changelogs existed has none
+   * and must still read.
+   */
+  changes: ChangesSchema.optional(),
 })
 export type Download = z.infer<typeof DownloadSchema>
 
@@ -82,6 +100,14 @@ export const IndexWidgetSchema = z.object({
   sha256: Sha256Schema,
   url: PackageUrl,
   publishedAt: z.iso.datetime(),
+  /**
+   * What this version changed, as plain text, from the package's own `CHANGELOG.md`.
+   *
+   * The whole point of the field: the person in front of *Update all* is asking what changes,
+   * and a permission list is not an answer. Plain text because the admin renders it as text —
+   * it was written by whoever opened the pull request.
+   */
+  changes: ChangesSchema.optional(),
   /** Older releases kept downloadable, newest first, for a rollback. */
   previous: z.array(DownloadSchema).default([]),
 })
@@ -114,6 +140,8 @@ export const IndexThemeSchema = z.object({
   sha256: Sha256Schema,
   url: PackageUrl,
   publishedAt: z.iso.datetime(),
+  /** What this version changed; a theme's is usually one line about its colours. */
+  changes: ChangesSchema.optional(),
   previous: z.array(DownloadSchema).default([]),
 })
 export type IndexTheme = z.infer<typeof IndexThemeSchema>

@@ -21,6 +21,7 @@ import { join, relative, sep } from 'node:path'
 import { ManifestSchema, type WidgetManifest } from './vendor/widgets/manifest.js'
 import { isPrivateLiteral } from './vendor/net/private.js'
 import { BUILTIN_THEME_IDS, THEME_ENTRY, THEME_LIMITS, ThemeFileSchema, type ThemeFile } from './theme.js'
+import { CHANGELOG_ENTRY, parseChangelog, type ChangelogEntry } from './changelog.js'
 
 /** What a folder at the repository root holds. The root name *is* the kind. */
 export type Kind = 'widget' | 'theme'
@@ -48,6 +49,8 @@ export interface WidgetPackage {
   manifest: WidgetManifest
   /** Sorted by name, so the zip built from them is byte-identical from one run to the next. */
   files: PackageFile[]
+  /** Every version the folder's `CHANGELOG.md` documents, empty when it ships none. */
+  changelog: ChangelogEntry[]
 }
 
 export interface ThemePackage {
@@ -56,6 +59,7 @@ export interface ThemePackage {
   version: string
   theme: ThemeFile
   files: PackageFile[]
+  changelog: ChangelogEntry[]
 }
 
 /** Either kind, told apart by `kind`. */
@@ -216,9 +220,11 @@ export async function readFolder(root: string, id: string, kind: Kind): Promise<
  */
 export async function readThemePackage(root: string, id: string): Promise<ThemePackage> {
   const files = await readFolder(root, id, 'theme')
-  const allowed = new Set([THEME_ENTRY, 'README.md'])
+  const allowed = new Set([THEME_ENTRY, 'README.md', CHANGELOG_ENTRY])
   for (const file of files) {
-    if (!allowed.has(file.name)) throw new ValidationError(id, `a theme folder holds ${THEME_ENTRY} and at most a README.md, not ${file.name}`)
+    if (!allowed.has(file.name)) {
+      throw new ValidationError(id, `a theme folder holds ${THEME_ENTRY} and at most a README.md and a ${CHANGELOG_ENTRY}, not ${file.name}`)
+    }
   }
   const entry = files.find((f) => f.name === THEME_ENTRY)
   if (!entry) throw new ValidationError(id, `${THEME_ENTRY} is missing`)
@@ -236,7 +242,7 @@ export async function readThemePackage(root: string, id: string): Promise<ThemeP
   // refuses them; saying so here tells an author before they open a pull request.
   if (BUILTIN_THEME_IDS.has(id)) throw new ValidationError(id, 'this id belongs to a theme Fremkit ships')
 
-  return { kind: 'theme', id, version: theme.version, theme, files }
+  return { kind: 'theme', id, version: theme.version, theme, files, changelog: changelogOf(id, files) }
 }
 
 /** Reads one `widgets/<id>/` folder and holds it to every rule above. */
@@ -278,7 +284,25 @@ export async function readPackage(root: string, id: string): Promise<WidgetPacka
     if (off.length) throw new ValidationError(id, `${file.name} loads a script from outside the package: ${off.join(', ')}`)
   }
 
-  return { kind: 'widget', id, version: manifest.version, manifest, files }
+  return { kind: 'widget', id, version: manifest.version, manifest, files, changelog: changelogOf(id, files) }
+}
+
+/**
+ * The folder's changelog, parsed, or nothing when it ships none.
+ *
+ * Whether *this* version needs an entry is not decided here: the answer depends on what is
+ * already published, which only the build knows. See `assertChangelog`.
+ */
+function changelogOf(id: string, files: PackageFile[]): ChangelogEntry[] {
+  const file = files.find((f) => f.name === CHANGELOG_ENTRY)
+  if (!file) return []
+  const entries = parseChangelog(file.data.toString('utf8'))
+  const seen = new Set<string>()
+  for (const entry of entries) {
+    if (seen.has(entry.version)) throw new ValidationError(id, `${CHANGELOG_ENTRY} documents ${entry.version} twice`)
+    seen.add(entry.version)
+  }
+  return entries
 }
 
 /**

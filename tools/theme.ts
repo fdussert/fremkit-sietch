@@ -21,7 +21,8 @@ import { ThemeSchema, TokensSchema } from './vendor/themes/theme.js'
 
 /** A theme package is a JSON file. These ceilings exist to be obviously never reached. */
 export const THEME_LIMITS = {
-  maxFiles: 2,
+  // `theme.json`, and at most a `README.md` and a `CHANGELOG.md` beside it.
+  maxFiles: 3,
   /** The zip, as downloaded. */
   maxCompressedBytes: 64 * 1024,
   maxUncompressedBytes: 64 * 1024,

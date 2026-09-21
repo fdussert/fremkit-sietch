@@ -20,6 +20,7 @@ import type { Kind, Package, ThemePackage, WidgetPackage } from './validate.js'
 import { ValidationError, limitsOf } from './validate.js'
 import { swatch } from './theme.js'
 import { compareSemver } from './semver.js'
+import { CHANGELOG_ENTRY } from './changelog.js'
 import { INDEX_SCHEMA_VERSION, RegistryIndexSchema, type Download, type IndexTheme, type IndexWidget, type RegistryIndex } from './schema.js'
 
 /**
@@ -55,8 +56,20 @@ export function connectionTypesOf(pkg: WidgetPackage): string[] {
   return out
 }
 
+/**
+ * The package as it is published: the folder's files, **without** `CHANGELOG.md`.
+ *
+ * It is left out on purpose, and the reason is what makes the whole backfill possible. A
+ * changelog is metadata about releases, not part of one: the index carries its text and Fremkit
+ * reads it from there, so the archive has no use for the file. Were it inside, adding an entry
+ * for a version already published would change that version's bytes — and "the same version is
+ * the same bytes" is the rule everything else here rests on. Kept out, an author can write down
+ * the history of a package released months ago without repacking a single one of them.
+ */
 export function packageZip(pkg: { files: { name: string; data: Buffer }[] }): Buffer {
-  const entries: ZipEntry[] = pkg.files.map((f) => ({ name: f.name, data: f.data }))
+  const entries: ZipEntry[] = pkg.files
+    .filter((f) => f.name !== CHANGELOG_ENTRY)
+    .map((f) => ({ name: f.name, data: f.data }))
   return writeZip(entries, FIXED_MTIME)
 }
 
@@ -101,6 +114,8 @@ interface Release {
   url: string
   publishedAt: string
   previous: Download[]
+  /** What this version changed, from the package's own changelog; '' when it documents none. */
+  changes: string
 }
 
 /** What the index already says about a package, in the shape both kinds have in common. */
@@ -111,6 +126,7 @@ interface Published {
   size: number
   publishedAt: string
   previous: Download[]
+  changes?: string
 }
 
 function joinUrl(base: string, path: string): string {
@@ -156,15 +172,40 @@ async function release(
   // release happened, not when the workflow last ran.
   const publishedAt = before && compareSemver(version, before.version) === 0 ? before.publishedAt : now.toISOString()
 
+  /**
+   * What this version changed.
+   *
+   * Required when the version is *new*: a release nobody described is a release the person
+   * updating cannot judge. A version already published needs nothing — its bytes are frozen and
+   * the entry it went out with is already in the index — but the folder's changelog is still
+   * matched by version, so a package can document a past release without being repacked.
+   */
+  const entry = pkg.changelog.find((e) => e.version === version)
+  const isNew = !before || compareSemver(version, before.version) > 0
+  if (isNew && !entry?.text) {
+    throw new ValidationError(pkg.id, `CHANGELOG.md has no entry for ${version} — add "## ${version}" and say what changed`)
+  }
+  // A republished version keeps whatever it went out with, unless the folder now says more.
+  const changes = entry?.text ?? before?.changes ?? ''
+
   /** The releases to keep downloadable beside this one: the previous current, then its own. */
   const carried: Download[] = []
   if (before && compareSemver(version, before.version) > 0) {
-    carried.push({ version: before.version, url: before.url, sha256: before.sha256, size: before.size })
+    carried.push({
+      version: before.version, url: before.url, sha256: before.sha256, size: before.size,
+      // The entry that release went out with. Read from the folder when it still documents it —
+      // an author filling in history — and from the published index otherwise, because the
+      // package for an older release is not in this checkout any more.
+      ...(entryText(pkg, before.version) ?? before.changes
+        ? { changes: entryText(pkg, before.version) ?? before.changes as string }
+        : {}),
+    })
   }
   for (const old of before?.previous ?? []) {
     if (carried.length >= KEEP_PREVIOUS) break
     if (old.version === version || carried.some((c) => c.version === old.version)) continue
-    carried.push(old)
+    const written = entryText(pkg, old.version)
+    carried.push(written ? { ...old, changes: written } : old)
   }
   const kept = carried.slice(0, KEEP_PREVIOUS)
 
@@ -182,7 +223,10 @@ async function release(
     }
   }
 
-  log.push(`${pkg.kind} ${pkg.id} ${version} — ${zip.byteLength} bytes, ${pkg.files.length} files, sha256 ${hash.slice(0, 12)}…`)
+  // The count is what went into the archive, not what is in the folder: `CHANGELOG.md` is one
+  // of the second and none of the first.
+  const packed = pkg.files.filter((f) => f.name !== CHANGELOG_ENTRY).length
+  log.push(`${pkg.kind} ${pkg.id} ${version} — ${zip.byteLength} bytes, ${packed} files, sha256 ${hash.slice(0, 12)}…`)
   return {
     path,
     zip,
@@ -190,8 +234,14 @@ async function release(
     size: zip.byteLength,
     url: joinUrl(opts.baseUrl, path),
     publishedAt,
+    changes,
     previous: kept.filter((old) => files.has(zipName(pkg.kind, pkg.id, old.version))),
   }
+}
+
+/** What the folder's changelog says about one version, or undefined when it says nothing. */
+function entryText(pkg: Package, version: string): string | undefined {
+  return pkg.changelog.find((e) => e.version === version)?.text || undefined
 }
 
 export async function build(packages: BuildInput, opts: BuildOptions): Promise<BuildResult> {
@@ -231,6 +281,7 @@ export async function build(packages: BuildInput, opts: BuildOptions): Promise<B
       sha256: out.sha256,
       url: out.url,
       publishedAt: out.publishedAt,
+      ...(out.changes ? { changes: out.changes } : {}),
       previous: out.previous,
     })
   }
@@ -251,6 +302,7 @@ export async function build(packages: BuildInput, opts: BuildOptions): Promise<B
       sha256: out.sha256,
       url: out.url,
       publishedAt: out.publishedAt,
+      ...(out.changes ? { changes: out.changes } : {}),
       previous: out.previous,
     })
   }

@@ -29,15 +29,16 @@ widget API is documented in its [writing-widgets guide](https://github.com/fduss
 ## Checks
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm test
-pnpm check-vendor
-pnpm validate
+bun install --frozen-lockfile
+bun run typecheck
+bun run lint
+bun run test
+bun run check-vendor
+bun run validate
 ```
 
-These are the pull request checks. `pnpm validate` reads the published registry index, so it
-needs network access and may refuse a version that was already published. `pnpm build` writes
+These are the pull request checks. The tests and the linter run through Vite+ (`vp test`, `vp lint`), and the typecheck uses TypeScript 7. `bun run validate` reads the published registry index, so it
+needs network access and may refuse a version that was already published. `bun run build` writes
 `dist/`; use it when changing packaging or the generated index. For an end-to-end install,
 follow [Testing the whole chain locally](README.md#testing-the-whole-chain-locally) with a
 separate Fremkit server and data directory.

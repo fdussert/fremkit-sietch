@@ -3,7 +3,7 @@
 `widgets/manifest.ts`, `net/private.ts` and `backup/zip.ts` are **byte-for-byte copies** of the
 files of the same name under `server/src/` in
 [fdussert/fremkit](https://github.com/fdussert/fremkit). They are copied rather than submoduled
-so a clone of this repository builds with nothing but `pnpm install`, and `check-vendor.ts`
+so a clone of this repository builds with nothing but `bun install`, and `check-vendor.ts`
 (run by both workflows) fetches the upstream files and refuses a difference — a schema that
 drifted would have the registry publish widgets the Fremkit installer then refuses.
 
@@ -13,7 +13,7 @@ on a pull request that has nothing to do with it and whose author cannot fix it 
 
 Do not edit them here. Change them upstream, then copy them over and bump `VENDOR_REF` in the
 same commit — that commit is where the decision to adopt a new schema belongs. Before the
-Fremkit commit exists on GitHub, `FREMKIT_RAW_BASE=/path/to/fremkit pnpm check-vendor` reads it
+Fremkit commit exists on GitHub, `FREMKIT_RAW_BASE=/path/to/fremkit bun run check-vendor` reads it
 off a local checkout instead.
 
 `config/schema.ts` and `i18n.ts` are not copies: they are the smallest stand-ins for what

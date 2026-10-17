@@ -54,7 +54,7 @@ consent to. It is the easiest thing to publish here and the safest thing to inst
    and only ever goes up. `author` is required, your handle as on a widget; `license` and
    `homepage` are optional. All three are shown on the card.
 3. Drop it at `themes/<id>/theme.json` here — that folder and at most a `README.md`, nothing
-   else — and run `pnpm validate`.
+   else — and run `bun run validate`.
 
 `fremkit` and `edge` ship with Fremkit so a fresh install has a choice with no network; those
 two ids are refused here.
@@ -77,8 +77,9 @@ request that passes here an install that works there.
 ## Running the checks before you open it
 
 ```bash
-pnpm install
-pnpm validate
+bun install
+bun run lint
+bun run validate
 ```
 
 That is exactly what the pull request runs. The full list of what it refuses is in the
@@ -95,6 +96,6 @@ The packed bytes are reproducible, so the hash you get is the hash CI will get.
 The manifest schema is Fremkit's, not this repository's: `tools/vendor/widgets/manifest.ts`,
 `net/private.ts` and `backup/zip.ts` are byte-for-byte copies of the files of the same name in
 [fdussert/fremkit](https://github.com/fdussert/fremkit). A copy rather than a submodule, so a
-clone builds with nothing but `pnpm install` — and `pnpm check-vendor`, which both workflows run,
+clone builds with nothing but `bun install` — and `bun run check-vendor`, which both workflows run,
 fetches the upstream files and fails the run on any difference. Never edit them here: change them
 upstream, then copy them over in their own commit.

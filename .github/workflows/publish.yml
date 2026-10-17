@@ -25,25 +25,28 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
       - name: Install Node
         uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
 
-      - run: pnpm typecheck
+      - run: bun install --frozen-lockfile
 
-      - run: pnpm test
+      - run: bun run typecheck
 
-      - run: pnpm check-vendor
+      - run: bun run lint
+
+      - run: bun run test
+
+      - run: bun run check-vendor
 
       # Reads the published index, refuses a version that did not go up, writes dist/.
-      - run: pnpm build
+      - run: bun run build
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@v4

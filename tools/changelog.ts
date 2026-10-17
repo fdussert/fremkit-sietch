@@ -67,9 +67,9 @@ export function joinWrapped(markdown: string): string {
   for (const raw of markdown.split('\n')) {
     const line = raw.trim()
     if (line === '') { out.push(''); continue }
-    const startsBlock = /^(?:[-*+]|\d+\.)\s+/.test(line) || /^#{1,6}\s+/.test(line) || /^>/.test(line) || /^```/.test(line)
+    const startsBlock = /^(?:[-*+]|\d+\.)\s+/.test(line) || /^#{1,6}\s+/.test(line) || line.startsWith('>') || line.startsWith('```')
     const previous = out[out.length - 1]
-    if (!startsBlock && previous !== undefined && previous !== '' && !/^```/.test(previous)) {
+    if (!startsBlock && previous !== undefined && previous !== '' && !previous.startsWith('```')) {
       out[out.length - 1] = `${previous} ${line}`
     } else {
       out.push(line)

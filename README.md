@@ -59,14 +59,18 @@ The `index.json` and `dist/` are generated: never edit them by hand, never commi
 ## Building it locally
 
 ```bash
-pnpm install
-pnpm test          # the validator, the packer and the index builder
-pnpm validate      # every rule, nothing written — what a pull request runs
-pnpm build         # the same, plus dist/index.json, dist/widgets/*.zip and dist/index.html
-pnpm check-vendor  # the vendored schema is still Fremkit's
+bun install
+bun run test          # the validator, the packer and the index builder
+bun run lint          # oxlint, through Vite+
+bun run validate      # every rule, nothing written — what a pull request runs
+bun run build         # the same, plus dist/index.json, dist/widgets/*.zip and dist/index.html
+bun run check-vendor  # the vendored schema is still Fremkit's
 ```
 
-`pnpm validate` and `pnpm build` read the index currently on Pages, so a version that does not go
+The tests and the linter run through Vite+ (`vp test`, `vp lint`) and the typecheck uses
+TypeScript 7.
+
+`bun run validate` and `bun run build` read the index currently on Pages, so a version that does not go
 up is refused before merge, and older releases stay downloadable for a rollback.
 
 ## What gets checked
@@ -101,7 +105,7 @@ Before anything is published there is nothing for a Fremkit to install from, so 
 against a local origin and serve it:
 
 ```bash
-FREMKIT_REGISTRY_BASE=http://127.0.0.1:8080 pnpm build
+FREMKIT_REGISTRY_BASE=http://127.0.0.1:8080 bun run build
 npx serve dist -l 8080
 ```
 

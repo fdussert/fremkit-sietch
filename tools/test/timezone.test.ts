@@ -18,11 +18,12 @@ const execFileAsync = promisify(execFile)
 const root = fileURLToPath(new URL('../..', import.meta.url))
 
 const PACKER = fileURLToPath(new URL('./fixtures/pack-hash.ts', import.meta.url))
-const TSX = fileURLToPath(new URL('../../node_modules/.bin/tsx', import.meta.url))
+/** Bun runs the TypeScript fixture directly; tsx is no longer a dependency. */
+const RUNNER = process.env.FREMKIT_TEST_RUNNER ?? 'bun'
 
 /** Packs the fixture folder under one `TZ` and returns the sha256 it printed. */
 async function hashUnder(tz: string): Promise<string> {
-  const { stdout } = await execFileAsync(TSX, [PACKER], { cwd: root, env: { ...process.env, TZ: tz } })
+  const { stdout } = await execFileAsync(RUNNER, [PACKER], { cwd: root, env: { ...process.env, TZ: tz } })
   return stdout.trim()
 }
 

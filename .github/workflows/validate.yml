@@ -23,24 +23,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
       - name: Install Node
         uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
 
-      - run: pnpm typecheck
+      - run: bun install --frozen-lockfile
 
-      - run: pnpm test
+      - run: bun run typecheck
+
+      - run: bun run lint
+
+      - run: bun run test
 
       # The vendored manifest schema must be the one Fremkit released, or this registry
       # publishes widgets the installer refuses.
-      - run: pnpm check-vendor
+      - run: bun run check-vendor
 
       # Reads the index already on Pages, so "the version must go up" is checked before merge.
-      - run: pnpm validate
+      - run: bun run validate

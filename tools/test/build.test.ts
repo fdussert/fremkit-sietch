@@ -335,7 +335,7 @@ describe('the changelog a release must carry', () => {
     const first = await build([pkg()], opts)
     const older = {
       ...first.index,
-      widgets: first.index.widgets.map((w) => { const { changes, ...rest } = w; return rest }),
+      widgets: first.index.widgets.map((w) => { const { changes: _changes, ...rest } = w; return rest }),
     }
     const second = await build(
       [pkg({ version: '1.1.0' }, undefined, [{ version: '1.1.0', text: 'Second.' }])],
@@ -365,7 +365,7 @@ describe('the page', () => {
     const first = await build([pkg()], opts)
     const older = {
       ...first.index,
-      widgets: first.index.widgets.map((w) => { const { changes, ...rest } = w; return rest }),
+      widgets: first.index.widgets.map((w) => { const { changes: _changes, ...rest } = w; return rest }),
     }
     expect(renderPage(RegistryIndexSchema.parse(older))).not.toContain('class="changes"')
   })

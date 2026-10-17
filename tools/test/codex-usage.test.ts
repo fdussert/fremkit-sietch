@@ -4,7 +4,6 @@ import { runInNewContext } from "node:vm";
 
 const now = 1800000000000;
 const first = "00000000-0000-4000-8000-000000000001";
-const second = "00000000-0000-4000-8000-000000000002";
 const part = (data: any, freshness = "fresh", error: string | null = null) => ({
   data,
   freshness,

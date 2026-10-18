@@ -99,6 +99,30 @@ describe('build', () => {
     expect(w.size).toBe(result.files.get('widgets/demo-1.0.0.zip')!.byteLength)
   })
 
+  it('publishes a preview beside the package, on the same origin, and keeps it in the zip', async () => {
+    const image = Buffer.from('RIFF....WEBPVP8 ')
+    const files = [
+      { name: 'index.html', data: Buffer.from('<html></html>') },
+      { name: 'manifest.json', data: Buffer.from('{}') },
+      { name: 'preview.webp', data: image },
+    ]
+    const result = await build([pkg({ preview: 'preview.webp' }, files)], opts)
+    expect(RegistryIndexSchema.safeParse(result.index).success).toBe(true)
+    expect(result.index.schema).toBe(1)
+    expect(result.index.widgets[0].preview).toBe(`${BASE}/previews/demo-1.0.0.webp`)
+    expect(result.files.get('previews/demo-1.0.0.webp')).toEqual(image)
+    // The installer refuses a package whose manifest names a preview it does not carry.
+    expect(readZip(result.files.get('widgets/demo-1.0.0.zip')!).map((e) => e.name)).toContain('preview.webp')
+    expect(renderPage(result.index)).toContain(`<img class="preview" src="${BASE}/previews/demo-1.0.0.webp"`)
+  })
+
+  it('warns about a widget with no preview, without refusing it', async () => {
+    const result = await build([pkg()], opts)
+    expect(result.index.widgets[0]).not.toHaveProperty('preview')
+    expect(result.log.some((line) => line.startsWith('warning: demo has no preview'))).toBe(true)
+    expect([...result.files.keys()].some((k) => k.startsWith('previews/'))).toBe(false)
+  })
+
   it('copies the permissions out of the manifest so the admin can show them before downloading', async () => {
     const result = await build([pkg({
       subscriptions: ['synology:*'], commands: ['synology'],

@@ -111,6 +111,15 @@ export const IndexWidgetSchema = z.object({
   changes: ChangesSchema.optional(),
   /** Older releases kept downloadable, newest first, for a rollback. */
   previous: z.array(DownloadSchema).default([]),
+  /**
+   * The widget's preview image (its manifest's `preview`), published beside the package so a card
+   * can show it before anything is installed. Optional: a widget with no preview has none, and a
+   * Fremkit that predates previews ignores the key, which is why `schema` stays 1.
+   *
+   * On this registry's own origin like every other URL here: Fremkit drops a preview anywhere
+   * else, and fetches it server-side, capped at 200 KB and checked to be a PNG or WebP.
+   */
+  preview: PackageUrl.optional(),
 })
 export type IndexWidget = z.infer<typeof IndexWidgetSchema>
 

@@ -47,8 +47,10 @@ function changes(entry: { changes?: string; version: string }): string {
 function card(w: IndexWidget): string {
   const meta = [w.author, w.license].filter(Boolean).map((v) => esc(v)).join(' · ')
   const home = w.homepage ? ` · <a href="${esc(w.homepage)}" rel="noopener noreferrer">homepage</a>` : ''
+  // The preview is on this page's own origin (the build asserts it), so it loads like the zip does.
+  const preview = w.preview ? `      <img class="preview" src="${esc(w.preview)}" alt="" loading="lazy">\n` : ''
   return `    <article>
-      <h2>${esc(text(w.name))} <span class="v">${esc(w.version)}</span></h2>
+${preview}      <h2>${esc(text(w.name))} <span class="v">${esc(w.version)}</span></h2>
       <p>${esc(text(w.description))}</p>
       <p class="perm">${esc(permissions(w))}</p>
 ${changes(w)}
@@ -131,6 +133,7 @@ h2 { font-size: 1.1rem; margin: 0 0 .35rem; }
 p { margin: .25rem 0; }
 .perm { color: var(--fg); font-size: .9rem; }
 .meta { color: var(--dim); font-size: .85rem; }
+.preview { display: block; max-width: min(100%, 32rem); height: auto; margin: 0 0 .75rem; border-radius: 12px; }
 footer { margin-top: 2rem; color: var(--dim); font-size: .85rem; }
 h1.section { font-size: 1.1rem; margin: 2rem 0 0; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
 .strip { display: flex; gap: 4px; margin: .35rem 0 .5rem; }

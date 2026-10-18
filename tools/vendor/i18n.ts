@@ -18,6 +18,16 @@ const MESSAGES: Record<string, string> = {
   'manifest.badLicense': 'license must be an SPDX identifier (MIT, Apache-2.0…)',
   'manifest.reservedChannel': 'channel reserved for the host',
   'manifest.privateNetworkHost': 'a private or local host is not allowed in permissions.network',
+  'manifest.previewNotACommand': 'a preview\'s channel must be listed in commands',
+  'manifest.badPreview': 'preview must be a .webp or .png file in the widget folder (a relative path, no ..)',
+  'manifest.badConnectionPath': 'invalid path: "/segment", with * (one segment) or ** (the rest), no query and no ..',
+  'manifest.connectionNeedsHost': 'a connection must declare exactly one "host" field, typed by the user',
+  'manifest.connectionHostNotSecret': 'the "host" field is not a secret: it is shown wherever the connection is',
+  'manifest.connectionSecretCount': 'this connection kind takes exactly one secret field (none for "host")',
+  'manifest.connectionHeaderName': 'headerName belongs to api-key-header only, and is required there',
+  'manifest.connectionQueryName': 'queryName belongs to api-key-query only, and is required there',
+  'manifest.connectionNameTaken': 'this name belongs to a built-in connection type; pick another',
+  'manifest.connectionHintTooLong': 'hint is over 2000 characters',
 }
 
 export function tr(_locale: unknown, key: string): string {

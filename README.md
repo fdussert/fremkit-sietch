@@ -47,6 +47,7 @@ type reads it. The install dialog names the connection a widget needs before you
 ```
 widgets/<id>/manifest.json   what the widget is, its version, the SDK it needs, its permissions
 widgets/<id>/index.html      the widget
+widgets/<id>/preview.webp    optional: its picture on the library card and the Sietch row
 widgets/<id>/...             any asset it ships (images, fonts, scripts of its own)
 themes/<id>/theme.json       a theme: colour tokens, no code, nothing to consent to
 tools/                       the validator, the packer and the index builder (TypeScript, vitest)
@@ -62,7 +63,7 @@ The `index.json` and `dist/` are generated: never edit them by hand, never commi
 pnpm install
 pnpm test          # the validator, the packer and the index builder
 pnpm validate      # every rule, nothing written — what a pull request runs
-pnpm build         # the same, plus dist/index.json, dist/widgets/*.zip and dist/index.html
+pnpm build         # the same, plus dist/index.json, dist/widgets/*.zip, dist/previews/* and dist/index.html
 pnpm check-vendor  # the vendored schema is still Fremkit's
 ```
 
@@ -76,6 +77,8 @@ The CI refuses a folder that
 
 - holds a dotfile, a symlink, a nested archive, an absolute or climbing path, or anything that is
   not a regular file;
+- holds two names a Mac stores as one file: equal once lower-cased and Unicode-normalised (NFC),
+  as APFS compares them — Fremkit's installer refuses such a package;
 - is over 200 files, 5 MB zipped, 20 MB unpacked, or holds a file over 5 MB;
 - has a `manifest.json` the Fremkit schema does not accept, or an `id` that is not the folder name;
 - shows a text that is not a `{ "fr": …, "en": … }` pair — the name, the description, every
@@ -87,8 +90,17 @@ The CI refuses a folder that
 - asks for the `config` channel, which carries the whole dashboard and no Fremkit will grant;
 - declares a private, loopback, link-local or `.local`-style host in `permissions.network`;
 - loads a `<script src=>` from outside the package — the widget CSP would block it anyway;
+- names a `preview` that is missing, over 200 KB, not the PNG or WebP its name says, or more than
+  15 % off twice the default size in pixels (see [CONTRIBUTING](CONTRIBUTING.md#a-preview-image));
+  a widget with **no** preview is only a warning in the log, for now;
 - reuses a published version, or goes backwards from it — and if the already-published index
   cannot be read at all, the build **fails** rather than guessing that nothing was published.
+
+A widget's preview is published twice: inside its zip, where the installer expects it, and as
+`previews/<id>-<version>.webp` (or `.png`) on Pages, which the index entry names as `preview`.
+Fremkit shows only a preview on the registry's own host, so it is never linked from anywhere else;
+the path carries the version so a new picture is a new URL. Theme swatch colours in the index are
+held to Fremkit's colour shape, `url(` refused.
 
 The zip is deterministic — sorted entries, a fixed timestamp, stored rather than compressed — so
 rebuilding an unchanged widget produces the same bytes, the same `sha256`, and no pointless

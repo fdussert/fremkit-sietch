@@ -41,6 +41,39 @@ months ago by adding a heading for it, and nothing is republished.
 Reviews look at what the widget asks for and what it does with remote data (escape it with
 `Fremkit.esc`), not at taste. Security concerns: see [SECURITY.md](SECURITY.md).
 
+## A preview image
+
+The Fremkit admin shows a widget's picture when its library card is hovered, and on its Sietch row
+before anybody installs it. It is a file of the widget's own folder, named by the manifest's
+`preview`:
+
+- a `.webp` (preferred) or a `.png`, by a relative path inside the folder (`preview.webp`);
+- at most **200 KB**, and really the format its name says — Fremkit's installer refuses a package
+  whose preview is missing, larger or not that image;
+- about **twice the default size in pixels**: a cell is 40 px, so a `[16, 10]` widget's preview is
+  1280 × 800. The CI refuses one more than 15 % off.
+
+Make it with Fremkit's tool rather than by hand, from a Fremkit checkout:
+
+```bash
+pnpm widget:preview my-widget --dir /path/to/fremkit-sietch/widgets
+```
+
+It renders the widget alone against a [demo
+server](https://github.com/fdussert/fremkit/blob/main/docs/demo-mode.md) — invented data only, so
+nothing of yours ends up in the picture — at twice its default size, writes `preview.webp` beside
+the manifest and sets `preview` in it. `PLAYWRIGHT` must point at an installed `playwright`
+package, and `CHROMIUM` at a Chromium executable if its browser is missing. **Look at the result**:
+a widget that needs a connection or settings to show anything is captured with its defaults, which
+is usually an empty state ("No connection", "Pick a light"). Capture it from a demo server you
+arranged yourself with `--url http://127.0.0.1:4250`, or leave the preview out — a picture of an
+empty tile sells nothing. Details and options: [A preview
+image](https://github.com/fdussert/fremkit/blob/main/docs/writing-widgets.md#a-preview-image).
+
+A preview is optional for now: a widget without one is a warning in the CI log, not a refusal.
+Adding one changes the package's bytes, so it is a new version with its changelog line like any
+other change.
+
 ## Publishing a theme
 
 A theme is colour tokens and nothing else: no code, no permissions, nothing for a user to

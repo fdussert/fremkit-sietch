@@ -4,7 +4,8 @@
     "fr": "Temp\u00e9ratures du Mac",
     "en": "Mac temperatures"
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "preview": "preview.webp",
   "sdk": 1,
   "author": "FlorianBruniaux",
   "license": "MIT",

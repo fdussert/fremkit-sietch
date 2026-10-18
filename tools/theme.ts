@@ -49,6 +49,17 @@ export const BUILTIN_THEME_IDS = new Set(['fremkit', 'edge'])
  */
 export const COLOR_RE = /^[#a-zA-Z0-9(),.%\s/-]+$/
 
+/**
+ * Whether a swatch value may be written into a `style` attribute: `COLOR_RE`, and no `url(`.
+ *
+ * The characters `COLOR_RE` allows also spell `url(//host/x)`, which in a `style` attribute is a
+ * request to anywhere. No colour has a `url(` in it, and Fremkit's index schema refuses one in a
+ * swatch token, so an index that carried it would be refused whole by every admin reading it.
+ */
+export function isSwatchColor(value: string): boolean {
+  return COLOR_RE.test(value) && !/url\s*\(/i.test(value)
+}
+
 /** The four tokens a card paints as a swatch strip, so a theme needs no preview image. */
 export const SWATCH_TOKENS = ['accent', 'bg', 'surface', 'text'] as const
 export type SwatchTokens = Record<(typeof SWATCH_TOKENS)[number], string>

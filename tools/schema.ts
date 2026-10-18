@@ -14,6 +14,7 @@
 import { z } from 'zod'
 import { ConnectionDeclSchema, SEMVER_RE, WIDGET_CATEGORIES } from './vendor/widgets/manifest.js'
 import { MAX_CHANGES } from './changelog.js'
+import { isSwatchColor } from './theme.js'
 
 export const INDEX_SCHEMA_VERSION = 1
 
@@ -114,6 +115,13 @@ export const IndexWidgetSchema = z.object({
 export type IndexWidget = z.infer<typeof IndexWidgetSchema>
 
 /**
+ * A swatch colour as the index carries it: Fremkit's `ColorSchema`, which refuses anything but
+ * the characters a colour is spelled with, and `url(` among those. Held here too so the build
+ * never publishes an index that every admin would refuse whole.
+ */
+const SwatchColor = z.string().min(1).max(64).refine(isSwatchColor, { message: 'not a colour' })
+
+/**
  * A theme, as the index lists it.
  *
  * No `sdk`, no `permissions`, no `connections`: a theme is a JSON file of colour tokens, it runs
@@ -130,12 +138,7 @@ export const IndexThemeSchema = z.object({
   license: z.string().max(64).optional(),
   /** A link the admin renders, so https and nothing else — unlike a package URL. */
   homepage: z.url({ protocol: /^https$/ }).optional(),
-  tokens: z.object({
-    accent: z.string().min(1).max(64),
-    bg: z.string().min(1).max(64),
-    surface: z.string().min(1).max(64),
-    text: z.string().min(1).max(64),
-  }),
+  tokens: z.object({ accent: SwatchColor, bg: SwatchColor, surface: SwatchColor, text: SwatchColor }),
   size: z.number().int().min(1),
   sha256: Sha256Schema,
   url: PackageUrl,

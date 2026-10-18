@@ -9,7 +9,7 @@
 
 import type { IndexTheme, IndexWidget, RegistryIndex } from './schema.js'
 import { WIDGET_CATEGORIES, type WidgetCategory } from './vendor/widgets/manifest.js'
-import { COLOR_RE } from './theme.js'
+import { isSwatchColor } from './theme.js'
 
 export function esc(value: unknown): string {
   return String(value ?? '')
@@ -63,14 +63,14 @@ ${changes(w)}
  * everything else *and* held to the shape a colour has: anything else is dropped rather than
  * rendered, because a value that reached `style` unchecked could close the attribute.
  *
- * The shape is `COLOR_RE`, the one the validator refuses a package with — two copies of it would
+ * The shape is `isSwatchColor`, the one the index schema refuses a token with — two copies of it would
  * mean a value the validator let through and this dropped, or worse the other way round.
  */
 function swatches(theme: IndexTheme): string {
   const order: (keyof IndexTheme['tokens'])[] = ['bg', 'surface', 'accent', 'text']
   return order.map((key) => {
     const value = theme.tokens[key]
-    if (!COLOR_RE.test(value)) return ''
+    if (!isSwatchColor(value)) return ''
     return `<i class="sw" style="background:${esc(value)}" title="${esc(key)}"></i>`
   }).join('')
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { THEME_LIMITS, swatch } from '../theme.js'
+import { THEME_LIMITS, isSwatchColor, swatch } from '../theme.js'
 import { limitsOf, readAll, readAllThemes, readThemePackage } from '../validate.js'
 import { build, packageZip, zipName } from '../build.js'
 import { RegistryIndexSchema } from '../schema.js'
@@ -248,6 +248,29 @@ describe('the index', () => {
     await expect(build({ widgets: [], themes: await readAllThemes(root) }, {
       ...opts, previous, fetchPublished: async () => packageZip(pkg),
     })).rejects.toThrow(/off its own origin/)
+  })
+})
+
+describe('isSwatchColor', () => {
+  it('takes the colours a token holds', () => {
+    for (const v of ['#d9b36a', 'rgb(1, 2, 3)', 'hsl(40 60% 50% / 0.5)', 'transparent']) expect(isSwatchColor(v), v).toBe(true)
+  })
+  it('refuses url(), which the allowed characters can spell, and anything that could close an attribute', () => {
+    for (const v of ['url(//evil.example.net/x)', 'URL (//evil.example.net/x)', 'rgb(1,2,3), url(x)', '" onload="x', '#fff;color:red']) {
+      expect(isSwatchColor(v), v).toBe(false)
+    }
+  })
+  it('is what the index schema holds the four swatch tokens to', () => {
+    const entry = {
+      id: 'x', version: '1.0.0', name: 'X', description: 'X',
+      tokens: { accent: 'url(//evil.example.net/x)', bg: '#000', surface: '#111', text: '#fff' },
+      size: 1, sha256: 'a'.repeat(64), url: 'https://example.github.io/fremkit-sietch/themes/x-1.0.0.zip',
+      publishedAt: '2026-09-18T12:00:00.000Z', previous: [],
+    }
+    const index = { registry: 'fremkit-sietch', generatedAt: '2026-09-18T12:00:00.000Z', schema: 1, widgets: [], themes: [entry] }
+    expect(RegistryIndexSchema.safeParse(index).success).toBe(false)
+    entry.tokens.accent = '#d9b36a'
+    expect(RegistryIndexSchema.safeParse(index).success).toBe(true)
   })
 })
 

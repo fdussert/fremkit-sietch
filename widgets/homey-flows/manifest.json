@@ -1,6 +1,6 @@
 { "id": "homey-flows",
   "name": { "fr": "Flows Homey", "en": "Homey flows" },
-  "version": "2.0.0",
+  "version": "2.0.1", "preview": "preview.webp",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Boutons pour lancer les flows d’un Homey Pro", "en": "Buttons that run the flows of a Homey Pro" },
   "category": "home",

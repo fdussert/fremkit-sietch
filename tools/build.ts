@@ -78,6 +78,16 @@ export function zipName(kind: Kind, id: string, version: string): string {
   return `${kind === 'theme' ? 'themes' : 'widgets'}/${id}-${version}.zip`
 }
 
+/**
+ * Where a widget's preview is published: `previews/<id>-<version>.<ext>`, beside the packages.
+ *
+ * Versioned like the zip, so a new picture is a new URL and Fremkit's cache, which is keyed by
+ * URL, never shows the old one. Only the current version's is published: a card shows one.
+ */
+export function previewName(id: string, version: string, file: string): string {
+  return `previews/${id}-${version}.${file.toLowerCase().endsWith('.png') ? 'png' : 'webp'}`
+}
+
 /** Both roots, or just the widgets — an array is the widgets, for the callers that only have them. */
 export type BuildInput = WidgetPackage[] | { widgets: WidgetPackage[]; themes: ThemePackage[] }
 
@@ -99,7 +109,7 @@ export interface BuildOptions {
 
 export interface BuildResult {
   index: RegistryIndex
-  /** Published path → bytes. `index.json` and the zips; the CLI writes them out. */
+  /** Published path → bytes. `index.json`, the zips and the previews; the CLI writes them out. */
   files: Map<string, Buffer>
   /** One line per package, for the workflow log. */
   log: string[]
@@ -256,6 +266,18 @@ export async function build(packages: BuildInput, opts: BuildOptions): Promise<B
 
   for (const pkg of input.widgets) {
     const out = await release(pkg, publishedWidgets.get(pkg.id), opts, now, files, log)
+    // The file itself was checked when the folder was read (`previewProblems` in validate.ts);
+    // here it is only copied out of the package to a URL the index can name.
+    let preview: string | undefined
+    const previewFile = pkg.manifest.preview ? pkg.files.find((f) => f.name === pkg.manifest.preview) : undefined
+    if (previewFile) {
+      const path = previewName(pkg.id, pkg.version, previewFile.name)
+      files.set(path, previewFile.data)
+      preview = joinUrl(opts.baseUrl, path)
+    } else {
+      // A warning for now, not a refusal: the widgets published before previews existed have none.
+      log.push(`warning: ${pkg.id} has no preview — make one with \`pnpm widget:preview\` (see CONTRIBUTING.md)`)
+    }
     widgets.push({
       id: pkg.id,
       version: pkg.version,
@@ -283,6 +305,7 @@ export async function build(packages: BuildInput, opts: BuildOptions): Promise<B
       publishedAt: out.publishedAt,
       ...(out.changes ? { changes: out.changes } : {}),
       previous: out.previous,
+      ...(preview ? { preview } : {}),
     })
   }
 
@@ -309,7 +332,8 @@ export async function build(packages: BuildInput, opts: BuildOptions): Promise<B
 
   // Every URL this index names must be on the origin it was built against. Fremkit refuses one
   // that is not, so publishing one would be publishing something nobody can install.
-  for (const url of [...widgets, ...themes].flatMap((e) => [e.url, ...e.previous.map((p) => p.url)])) {
+  const previews = widgets.flatMap((w) => (w.preview ? [w.preview] : []))
+  for (const url of [...widgets, ...themes].flatMap((e) => [e.url, ...e.previous.map((p) => p.url)]).concat(previews)) {
     if (!url.startsWith(joinUrl(opts.baseUrl, ''))) throw new Error(`the generated index names a URL off its own origin: ${url}`)
   }
 

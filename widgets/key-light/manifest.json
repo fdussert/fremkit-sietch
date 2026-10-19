@@ -1,6 +1,6 @@
 { "id": "key-light",
   "name": { "fr": "Key Light", "en": "Key Light" },
-  "version": "1.0.0",
+  "version": "1.0.1", "preview": "preview.webp",
   "sdk": 1, "author": "usul", "license": "MIT", "homepage": "https://github.com/fdussert/fremkit-sietch",
   "description": { "fr": "Allumer, éteindre et régler une Elgato Key Light", "en": "Switch an Elgato Key Light on or off, and set it" },
   "category": "home",

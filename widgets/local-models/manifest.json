@@ -4,7 +4,7 @@
     "fr": "IA locale",
     "en": "Local AI"
   },
-  "version": "1.0.1",
+  "version": "1.0.2", "preview": "preview.webp",
   "sdk": 1,
   "author": "FlorianBruniaux",
   "license": "MIT",

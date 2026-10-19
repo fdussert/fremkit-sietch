@@ -1,6 +1,6 @@
 { "id": "synology-system",
   "name": { "fr": "Système Synology", "en": "Synology system" },
-  "version": "1.0.2",
+  "version": "1.0.3", "preview": "preview.webp",
   "sdk": 1,
   "author": "usul",
   "license": "MIT",

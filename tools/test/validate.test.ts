@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LIMITS, checkEntryName, isBilingual, isLocalName, localizedTexts, offPackageScripts, readAllPackages, readPackage, assertNoSharedIds } from '../validate.js'
+import { LIMITS, assertDistinctNames, checkEntryName, isBilingual, isLocalName, localizedTexts, offPackageScripts, readAllPackages, readPackage, assertNoSharedIds } from '../validate.js'
 import { ManifestSchema } from '../vendor/widgets/manifest.js'
 
 let root: string
@@ -34,6 +34,18 @@ describe('checkEntryName', () => {
     for (const name of ['index.html', 'assets/logo.svg', 'a/b/c.js', 'style.css']) {
       expect(() => checkEntryName('demo', name), name).not.toThrow()
     }
+  })
+})
+
+describe('assertDistinctNames', () => {
+  it('refuses two names a Mac would store as one file', () => {
+    // Built here rather than on disk: the Mac running the tests could not hold both.
+    expect(() => assertDistinctNames('demo', ['a.png', 'A.png'])).toThrow(/same file/)
+    expect(() => assertDistinctNames('demo', ['caf\u00e9.png', 'cafe\u0301.png'])).toThrow(/same file/)
+    expect(() => assertDistinctNames('demo', ['img/Logo.svg', 'IMG/logo.svg'])).toThrow(/same file/)
+  })
+  it('accepts names that differ by more than that', () => {
+    expect(() => assertDistinctNames('demo', ['a.png', 'b.png', 'a/a.png', 'caf\u00e9.png', 'cafe.png'])).not.toThrow()
   })
 })
 
@@ -156,6 +168,41 @@ describe('readPackage', () => {
     await writeFile(join(root, 'demo', 'manifest.json'), JSON.stringify(manifest({ id: 'demo' })))
     await writeFile(join(root, 'demo', 'index.html'), '<script src="https://cdn.example.com/x.js"></script>')
     await expect(readPackage(root, 'demo')).rejects.toThrow(/outside the package/)
+  })
+
+  it('checks a declared preview: present, a real image of its format, about twice the default size', async () => {
+    // defaultSize [8, 4] → 8 × 4 cells of 40 px, twice: 640 × 320.
+    const png = (width: number, height: number) => {
+      const b = Buffer.alloc(33)
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0)
+      b.writeUInt32BE(13, 8); b.write('IHDR', 12, 'ascii'); b.writeUInt32BE(width, 16); b.writeUInt32BE(height, 20)
+      return b
+    }
+    await widget('demo', { 'preview.png': png(640, 320) }, manifest({ id: 'demo', preview: 'preview.png' }))
+    await expect(readPackage(root, 'demo')).resolves.toMatchObject({ id: 'demo' })
+
+    await widget('demo', { 'preview.png': png(300, 300) }, manifest({ id: 'demo', preview: 'preview.png' }))
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/should be about 640×320/)
+
+    await widget('demo', { 'preview.png': 'not an image' }, manifest({ id: 'demo', preview: 'preview.png' }))
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/not a PNG image/)
+
+    await widget('demo', {}, manifest({ id: 'demo', preview: 'missing.webp' }))
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/not in the package/)
+
+    await widget('demo', {}, manifest({ id: 'demo', preview: '../escape.png' }))
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/preview/)
+  })
+
+  it('refuses a settings preview whose channel is not one of the widget\'s commands', async () => {
+    const settingsSchema = {
+      mode: {
+        type: 'enum', label: { fr: 'Mode', en: 'Mode' }, options: ['a', 'b'],
+        preview: { channel: 'elsewhere', command: 'preview' },
+      },
+    }
+    await widget('demo', {}, manifest({ id: 'demo', settingsSchema }))
+    await expect(readPackage(root, 'demo')).rejects.toThrow(/preview's channel must be listed in commands/)
   })
 
   it('requires an author, since the card credits one', async () => {

@@ -1,3 +1,8 @@
+## 1.0.2 — 2026-10-19
+
+### Added
+- A picture of the widget at work, shown on its card in the library and on the Sietch before you install it.
+
 ## 1.0.1 — 2026-10-16
 
 ### Changed

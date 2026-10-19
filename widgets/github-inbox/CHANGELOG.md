@@ -4,6 +4,11 @@ What changed for the person using this widget, version by version. The format fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the newest version is first, and the
 entry of the version being published is what the Fremkit admin shows before an update.
 
+## 1.2.6 — 2026-10-18
+
+### Added
+- A picture of the widget at work, shown on its card in the library and on the Sietch before you install it.
+
 ## 1.2.5 — 2026-10-16
 
 ### Changed

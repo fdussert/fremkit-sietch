@@ -18,7 +18,7 @@
 
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
-import { ManifestSchema, type WidgetManifest } from './vendor/widgets/manifest.js'
+import { ManifestSchema, previewProblems, type WidgetManifest } from './vendor/widgets/manifest.js'
 import { isPrivateLiteral } from './vendor/net/private.js'
 import { BUILTIN_THEME_IDS, THEME_ENTRY, THEME_LIMITS, ThemeFileSchema, type ThemeFile } from './theme.js'
 import { CHANGELOG_ENTRY, parseChangelog, type ChangelogEntry } from './changelog.js'
@@ -177,6 +177,24 @@ export function offPackageScripts(html: string): string[] {
 }
 
 /**
+ * Refuses two entries that name one file on the disk they are unpacked on.
+ *
+ * APFS ignores case and Unicode normalisation, so `a.png` and `A.png`, or `café.png` spelled
+ * precomposed (NFC) and decomposed (NFD), are one file on a Mac: the second entry would silently
+ * replace the first. A Linux runner holds both happily; Fremkit's installer compares names the
+ * same way and refuses the package, and this tells the author before it gets that far.
+ */
+export function assertDistinctNames(id: string, names: readonly string[]): void {
+  const seen = new Map<string, string>()
+  for (const name of names) {
+    const key = name.normalize('NFC').toLowerCase()
+    const clash = seen.get(key)
+    if (clash !== undefined) throw new ValidationError(id, `${clash} and ${name} are the same file on a Mac (names compare without case or Unicode normalisation)`)
+    seen.set(key, name)
+  }
+}
+
+/**
  * Reads a folder into sorted files, holding every entry to the name and size rules of its kind.
  *
  * The half both kinds share. What is in the files is the caller's business.
@@ -205,6 +223,7 @@ export async function readFolder(root: string, id: string, kind: Kind): Promise<
   }
   await walk(folder)
 
+  assertDistinctNames(id, files.map((f) => f.name))
   if (files.length > limits.maxFiles) throw new ValidationError(id, `over ${limits.maxFiles} files`)
   if (total > limits.maxUncompressedBytes) throw new ValidationError(id, `over ${limits.maxUncompressedBytes} bytes unpacked`)
   files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
@@ -294,6 +313,15 @@ export async function readPackage(root: string, id: string): Promise<WidgetPacka
     if (!file.name.toLowerCase().endsWith('.html')) continue
     const off = offPackageScripts(file.data.toString('utf8'))
     if (off.length) throw new ValidationError(id, `${file.name} loads a script from outside the package: ${off.join(', ')}`)
+  }
+
+  // The installer refuses a preview that is missing, too heavy or not the format its name says;
+  // the size check is the registry's and `widget:check`'s alone, since a picture slightly off is
+  // not worth refusing an install over but is worth telling the author about.
+  if (manifest.preview !== undefined) {
+    const file = files.find((f) => f.name === manifest.preview)
+    const problems = previewProblems(manifest, file ? new Uint8Array(file.data) : null, { checkSize: true })
+    if (problems.length) throw new ValidationError(id, problems.join('; '))
   }
 
   return { kind: 'widget', id, version: manifest.version, manifest, files, changelog: changelogOf(id, files) }

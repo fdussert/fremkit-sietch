@@ -1,0 +1,43 @@
+{
+  "id": "github-my-scope",
+  "name": { "fr": "Mes dépôts GitHub", "en": "My GitHub scope" },
+  "version": "1.1.0",
+  "sdk": 1,
+  "author": "Livio Gama",
+  "license": "MIT",
+  "homepage": "https://github.com/LivioGama/fremkit-sietch",
+  "description": {
+    "fr": "Dépôts classés selon votre activité GitHub récente, avec vos notifications, revues et pull requests.",
+    "en": "Repositories ordered by your recent GitHub activity, alongside your notifications, reviews, and pull requests."
+  },
+  "category": "dev",
+  "icon": "github",
+  "minSize": [12, 5],
+  "defaultSize": [20, 10],
+  "compact": { "width": 5 },
+  "subscriptions": ["github:*"],
+  "commands": ["github:*"],
+  "settingsSchema": {
+    "connection": {
+      "type": "connection",
+      "connectionType": "github",
+      "label": { "fr": "Connexion", "en": "Connection" }
+    },
+    "count": {
+      "type": "enum",
+      "default": "5",
+      "scope": "tile",
+      "label": { "fr": "Dépôts affichés", "en": "Repositories shown" },
+      "options": [
+        { "value": "3", "label": { "fr": "3", "en": "3" } },
+        { "value": "4", "label": { "fr": "4", "en": "4" } },
+        { "value": "5", "label": { "fr": "5", "en": "5" } },
+        { "value": "6", "label": { "fr": "6", "en": "6" } },
+        { "value": "7", "label": { "fr": "7", "en": "7" } },
+        { "value": "8", "label": { "fr": "8", "en": "8" } },
+        { "value": "9", "label": { "fr": "9", "en": "9" } },
+        { "value": "10", "label": { "fr": "10", "en": "10" } }
+      ]
+    }
+  }
+}

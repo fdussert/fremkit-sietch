@@ -1,6 +1,6 @@
 { "id": "synology-storage",
   "name": { "fr": "Stockage Synology", "en": "Synology storage" },
-  "version": "1.0.2",
+  "version": "1.0.3", "preview": "preview.webp",
   "sdk": 1,
   "author": "usul",
   "license": "MIT",

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Vercel Deployments</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;color:var(--text,#e6e8eb);font-family:var(--font,-apple-system,system-ui,sans-serif);overflow:hidden}
+  .wrap{box-sizing:border-box;height:100%;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+  .list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px}
+  .row{min-height:44px;padding:7px 10px;border-radius:10px;background:var(--surface-2,rgba(128,128,128,.12));display:flex;align-items:center;gap:10px}
+  .dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--text-muted,#8b93a0)}.dot.ready{background:var(--ok,#2fb36b)}.dot.error,.dot.canceled{background:var(--danger,#d9463f)}.dot.building{background:var(--accent,#d9b36a)}
+  .body{flex:1;min-width:0}.name{font-size:calc(14px * var(--text-scale,1));font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sub,.when,.message{font-size:calc(11px * var(--text-scale,1));color:var(--text-muted,#8b93a0)}
+  .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.when{flex:none}.message{font-size:calc(13px * var(--text-scale,1))}.bad{color:var(--danger,#d9463f)}[hidden]{display:none!important}
+  html.on-light body{color:var(--on-surface,#0b0d10)}html.on-light .sub,html.on-light .when,html.on-light .message{color:var(--on-surface,#0b0d10);opacity:.7}
+</style></head><body><main class="wrap">
+  <div class="message" id="message"></div><div class="list" id="list"></div>
+</main><script>
+  var L = {
+    noConnection: { fr: 'Choisissez une connexion Vercel.', en: 'Choose a Vercel connection.' },
+    loading: { fr: 'Chargement…', en: 'Loading…' },
+    noData: { fr: 'Aucune réponse reçue de Vercel.', en: 'No deployment data received.' },
+    empty: { fr: 'Aucun déploiement correspondant.', en: 'No matching deployments.' },
+    unauthorized: { fr: 'Jeton refusé.', en: 'Token refused.' },
+    'rate-limited': { fr: 'Quota Vercel atteint.', en: 'Vercel rate limit reached.' },
+    offline: { fr: 'Vercel injoignable.', en: 'Vercel is unreachable.' },
+    unconfigured: { fr: 'Connexion incomplète.', en: 'Connection is incomplete.' },
+    ready: { fr: 'prêt', en: 'ready' }, building: { fr: 'en cours', en: 'building' },
+    error: { fr: 'échoué', en: 'failed' }, canceled: { fr: 'annulé', en: 'canceled' },
+    unknown: { fr: 'inconnu', en: 'unknown' }, preview: { fr: 'aperçu', en: 'preview' }, production: { fr: 'production', en: 'production' }
+  }
+  var channel = null, unsubscribe = null, snapshot = null, project = '', status = 'all'
+  var noDataTimer = null, noDataTimedOut = false
+  var NO_DATA_TIMEOUT_MS = 15000
+  function ago(timestamp) {
+    var minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000))
+    if (minutes < 60) return Fremkit.t({ fr: 'il y a {n} min', en: '{n}m ago' }, { n: minutes })
+    var hours = Math.floor(minutes / 60)
+    if (hours < 24) return Fremkit.t({ fr: 'il y a {n} h', en: '{n}h ago' }, { n: hours })
+    return Fremkit.t({ fr: 'il y a {n} j', en: '{n}d ago' }, { n: Math.floor(hours / 24) })
+  }
+  function category(value) {
+    if (value === 'READY') return 'ready'
+    if (value === 'ERROR') return 'error'
+    if (value === 'CANCELED') return 'canceled'
+    if (['BUILDING','INITIALIZING','QUEUED','DEPLOYING'].indexOf(value) >= 0) return 'building'
+    return 'unknown'
+  }
+  function matches(item) {
+    var state = category(item.state)
+    if (status === 'building' && state !== 'building') return false
+    if (status === 'ready' && state !== 'ready') return false
+    if (status === 'failed' && state !== 'error' && state !== 'canceled') return false
+    return !project || item.name.toLowerCase().indexOf(project.toLowerCase()) >= 0
+  }
+  function render() {
+    var message = document.getElementById('message'), list = document.getElementById('list')
+    list.innerHTML = ''
+    if (!channel) { message.textContent = Fremkit.t(L.noConnection); return }
+    if (!snapshot) {
+      message.textContent = Fremkit.t(noDataTimedOut ? L.noData : L.loading)
+      message.className = 'message' + (noDataTimedOut ? ' bad' : '')
+      return
+    }
+    var hasError = Boolean(snapshot.error)
+    if (hasError) {
+      message.textContent = Fremkit.t(L[snapshot.error] || L.offline)
+      message.className = 'message bad'
+    }
+    var rows = (snapshot.deployments || []).filter(matches)
+    if (!hasError) {
+      message.textContent = rows.length ? '' : Fremkit.t(L.empty)
+      message.className = 'message'
+    }
+    list.innerHTML = rows.map(function (item) {
+      var state = category(item.state), target = item.target && L[item.target] ? Fremkit.t(L[item.target]) : ''
+      return '<div class="row"><i class="dot ' + Fremkit.esc(state) + '"></i><div class="body"><div class="name">' + Fremkit.esc(item.name) + '</div>' +
+        '<div class="sub">' + Fremkit.esc(Fremkit.t(L[state] || L.unknown)) + (target ? ' · ' + Fremkit.esc(target) : '') + '</div></div>' +
+        '<span class="when">' + Fremkit.esc(ago(item.createdAt || Date.now())) + '</span></div>'
+    }).join('')
+  }
+  function applySettings(settings) {
+    project = typeof settings.project === 'string' ? settings.project.trim() : ''
+    status = settings.status || 'all'
+    var next = settings.connection ? 'vercel:' + settings.connection : null
+    if (next !== channel) {
+      if (unsubscribe) { unsubscribe(); unsubscribe = null }
+      if (noDataTimer !== null) { clearTimeout(noDataTimer); noDataTimer = null }
+      channel = next; snapshot = null
+      noDataTimedOut = false
+      if (channel) {
+        unsubscribe = Fremkit.subscribe(channel, function (data) {
+          snapshot = data
+          if (noDataTimer !== null) { clearTimeout(noDataTimer); noDataTimer = null }
+          noDataTimedOut = false
+          render()
+        })
+        noDataTimer = setTimeout(function () {
+          noDataTimer = null
+          if (channel && !snapshot) { noDataTimedOut = true; render() }
+        }, NO_DATA_TIMEOUT_MS)
+      }
+    }
+    render()
+  }
+  Fremkit.whenReady(function () {
+    document.documentElement.lang = Fremkit.locale
+    Fremkit.onLocale(function (locale) { document.documentElement.lang = locale; render() })
+    applySettings(Fremkit.settings || {})
+    Fremkit.onSettings(function (settings) { applySettings(settings || {}) })
+  })
+</script></body></html>

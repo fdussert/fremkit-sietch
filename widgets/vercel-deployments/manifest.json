@@ -1,0 +1,28 @@
+{
+  "id": "vercel-deployments",
+  "name": { "fr": "Déploiements Vercel", "en": "Vercel Deployments" },
+  "version": "1.0.0",
+  "sdk": 1,
+  "author": "Livio Gama",
+  "license": "MIT",
+  "homepage": "https://github.com/LivioGama/fremkit-sietch",
+  "description": { "fr": "Déploiements récents d’un compte Vercel ou d’une équipe.", "en": "Recent deployments from a Vercel account or team." },
+  "category": "dev",
+  "icon": "triangle",
+  "minSize": [12, 5],
+  "defaultSize": [20, 10],
+  "subscriptions": ["vercel:*"],
+  "settingsSchema": {
+    "connection": { "type": "connection", "connectionType": "vercel", "label": { "fr": "Connexion", "en": "Connection" } },
+    "project": { "type": "string", "default": "", "scope": "tile", "label": { "fr": "Filtrer par projet", "en": "Filter by project" } },
+    "status": {
+      "type": "enum", "default": "all", "scope": "tile", "label": { "fr": "État", "en": "Status" },
+      "options": [
+        { "value": "all", "label": { "fr": "Tous", "en": "All" } },
+        { "value": "building", "label": { "fr": "En cours", "en": "Building" } },
+        { "value": "ready", "label": { "fr": "Prêts", "en": "Ready" } },
+        { "value": "failed", "label": { "fr": "Échoués ou annulés", "en": "Failed or canceled" } }
+      ]
+    }
+  }
+}

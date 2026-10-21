@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2FA Code</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:var(--text,#e6e8eb);font-family:var(--font,-apple-system,system-ui,sans-serif)}
+    .wrap{box-sizing:border-box;height:100%;padding:12px;display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:10px}
+    button{min-height:58px;border:0;border-radius:14px;padding:10px;background:var(--surface-3,#252a32);color:inherit;font:600 calc(16px * var(--text-scale,1)) var(--font,-apple-system,system-ui,sans-serif);cursor:pointer;touch-action:manipulation}
+    button:active{background:var(--accent,#d9b36a);color:var(--on-accent,#0b0d10)}
+    button:disabled{opacity:.65;cursor:wait}
+    .status{min-height:2.5em;text-align:center;font-size:calc(13px * var(--text-scale,1));line-height:1.3;opacity:.78}
+    html.on-light body{color:var(--on-surface,#0b0d10)}
+    html.on-light button{background:rgba(128,128,128,.2)}
+    html.accent-fill button{background:rgba(0,0,0,.18)}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <button id="copy" type="button"></button>
+    <div id="status" class="status" aria-live="polite"></div>
+  </main>
+  <script>
+    var TEXT = {
+      button: { fr: 'Copier le dernier code', en: 'Copy latest code' },
+      working: { fr: 'Recherche dans les messages récents…', en: 'Checking recent Messages…' },
+      copied: { fr: 'Code copié. L’effacement du presse-papiers est programmé dans une minute.', en: 'Code copied. Clipboard cleanup is scheduled in one minute.' },
+      missing: { fr: 'Aucun code récent trouvé.', en: 'No recent verification code found.' },
+      unavailable: { fr: 'Messages est inaccessible. Vérifiez l’accès et la compatibilité de la base.', en: 'Messages could not be read. Check access and database compatibility.' },
+      localOnly: { fr: 'Cette action est disponible uniquement sur ce Mac.', en: 'This action is available only on this Mac.' },
+      copyFailed: { fr: 'Le code a été trouvé, mais n’a pas pu être copié.', en: 'A code was found but could not be copied.' },
+      copiedCode: { fr: 'Copié', en: 'Copied' }
+    }
+
+    Fremkit.whenReady(function () {
+      var button = document.getElementById('copy')
+      var status = document.getElementById('status')
+      var clearTimer = 0
+
+      button.textContent = Fremkit.t(TEXT.button)
+
+      button.addEventListener('click', function () {
+        if (button.disabled) return
+        button.disabled = true
+        status.textContent = Fremkit.t(TEXT.working)
+        clearTimeout(clearTimer)
+
+        Fremkit.sendCommand('messages-2fa', 'copyLatest', null).then(function (result) {
+          if (result && result.ok === true) {
+            button.textContent = Fremkit.t(TEXT.copiedCode)
+            status.textContent = Fremkit.t(TEXT.copied)
+            clearTimer = setTimeout(function () {
+              button.textContent = Fremkit.t(TEXT.button)
+              status.textContent = ''
+            }, 30000)
+            return
+          }
+          var message = result && result.error === 'Available only from this Mac.' ? Fremkit.t(TEXT.localOnly)
+            : result && result.error === 'No recent verification code found.' ? Fremkit.t(TEXT.missing)
+            : result && result.error === 'The code could not be copied.' ? Fremkit.t(TEXT.copyFailed)
+            : result && result.error ? result.error : Fremkit.t(TEXT.unavailable)
+          status.textContent = message
+          button.textContent = Fremkit.t(TEXT.button)
+        }).catch(function () {
+          status.textContent = Fremkit.t(TEXT.unavailable)
+          button.textContent = Fremkit.t(TEXT.button)
+        }).finally(function () {
+          button.disabled = false
+        })
+      })
+    })
+  </script>
+</body>
+</html>

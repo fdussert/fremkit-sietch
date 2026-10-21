@@ -1,0 +1,18 @@
+{
+  "id": "rectangle",
+  "name": { "fr": "Rectangle", "en": "Rectangle" },
+  "version": "1.2.2",
+  "sdk": 1,
+  "author": "usul",
+  "license": "MIT",
+  "homepage": "https://support.apple.com/guide/mac-help/tile-app-windows-mchlef287e5d/mac",
+  "description": {
+    "fr": "Place une fenêtre avec les outils intégrés de macOS : moitié gauche, moitié droite, plein écran ou écran suivant.",
+    "en": "Place a window with built-in macOS tools: left half, right half, fill screen, or next display."
+  },
+  "category": "productivity",
+  "icon": "move",
+  "minSize": [8, 4],
+  "defaultSize": [10, 8],
+  "commands": ["rectangle"]
+}

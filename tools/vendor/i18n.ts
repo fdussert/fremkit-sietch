@@ -28,6 +28,11 @@ const MESSAGES: Record<string, string> = {
   'manifest.connectionQueryName': 'queryName belongs to api-key-query only, and is required there',
   'manifest.connectionNameTaken': 'this name belongs to a built-in connection type; pick another',
   'manifest.connectionHintTooLong': 'hint is over 2000 characters',
+  'manifest.listSummaryUnknown': 'summary may only name itemSchema fields',
+  'manifest.itemListOnly': 'itemSchema, max and summary only apply to a list field',
+  'manifest.oneNestedList': 'a list item may hold one list at most',
+  'manifest.showWhenUnknown': 'showWhen may only name other fields of the same item',
+  'manifest.listGridNotANumber': 'grid must be a number of columns or the key of a number setting',
 }
 
 export function tr(_locale: unknown, key: string): string {

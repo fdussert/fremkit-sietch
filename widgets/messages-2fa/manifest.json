@@ -1,0 +1,18 @@
+{
+  "id": "messages-2fa",
+  "name": { "fr": "Code 2FA", "en": "2FA Code" },
+  "version": "1.0.4",
+  "sdk": 1,
+  "author": "LivioGama",
+  "license": "MIT",
+  "homepage": "https://github.com/LivioGama/fremkit-sietch",
+  "description": {
+    "fr": "Cherche dans les messages entrants récents et copie un code. Exige l’accès complet au disque de macOS, plus large que Messages.",
+    "en": "Finds a code in recent incoming Messages and copies it. Requires macOS Full Disk Access, which is broader than Messages."
+  },
+  "category": "productivity",
+  "icon": "shield-check",
+  "minSize": [8, 4],
+  "defaultSize": [12, 6],
+  "commands": ["messages-2fa"]
+}

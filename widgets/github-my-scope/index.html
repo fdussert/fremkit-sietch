@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>My GitHub scope</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;color:var(--text,#e6e8eb);font-family:var(--font,-apple-system,system-ui,sans-serif);overflow:hidden}
+  .wrap{box-sizing:border-box;height:100%;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+  .scope{font-size:calc(11px * var(--text-scale,1));color:var(--text-muted,#8b93a0);line-height:1.35}
+  .list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+  .row{box-sizing:border-box;width:100%;min-height:44px;padding:7px 10px;border:0;border-radius:10px;background:var(--surface-2,rgba(128,128,128,.12));color:inherit;font:inherit;text-align:left;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .row:focus-visible{outline:2px solid var(--accent,#d9b36a)}
+  .body{flex:1;min-width:0}.repo{font-size:calc(14px * var(--text-scale,1));font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .when{flex:none;font-size:calc(11px * var(--text-scale,1));color:var(--text-muted,#8b93a0)}
+  .message{font-size:calc(13px * var(--text-scale,1));color:var(--text-muted,#8b93a0)}
+  .error{color:var(--danger,#d9463f)}[hidden]{display:none!important}
+  html.on-light body{color:var(--on-surface,#0b0d10)}html.on-light .scope,html.on-light .when,html.on-light .message{color:var(--on-surface,#0b0d10);opacity:.72}
+</style></head>
+<body><main class="wrap">
+  <div class="scope" id="scope"></div>
+  <div class="message" id="message"></div>
+  <div class="message error" id="error" hidden></div>
+  <div class="list" id="list"></div>
+</main>
+<script src="activity.js"></script>
+<script>
+  var L = {
+    scope: { fr: 'Dépôts triés selon votre activité GitHub récente. Le flux peut être retardé.', en: 'Repositories ordered by your recent GitHub activity. The feed may lag.' },
+    noConnection: { fr: 'Choisissez une connexion GitHub dans les paramètres.', en: 'Choose a GitHub connection in settings.' },
+    loading: { fr: 'Chargement…', en: 'Loading…' },
+    empty: { fr: 'Aucune activité GitHub récente trouvée.', en: 'No recent GitHub activity found.' },
+    activityUnavailable: { fr: 'Historique d’activité GitHub indisponible.', en: 'GitHub activity history is unavailable.' },
+    openError: { fr: 'Impossible d’ouvrir ce dépôt.', en: 'Could not open this repository.' }
+  }
+  var channel = null, unsubscribe = null, snapshot = null, count = 5, openError = false
+  function ago(timestamp) {
+    var seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+    if (seconds < 60) return Fremkit.t({ fr: 'il y a {n} s', en: '{n}s ago' }, { n: seconds })
+    var minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return Fremkit.t({ fr: 'il y a {n} min', en: '{n}m ago' }, { n: minutes })
+    var hours = Math.floor(minutes / 60)
+    if (hours < 24) return Fremkit.t({ fr: 'il y a {n} h', en: '{n}h ago' }, { n: hours })
+    return Fremkit.t({ fr: 'il y a {n} j', en: '{n}d ago' }, { n: Math.floor(hours / 24) })
+  }
+  function render() {
+    var scope = document.getElementById('scope'), message = document.getElementById('message')
+    var list = document.getElementById('list'), error = document.getElementById('error')
+    scope.textContent = Fremkit.t(L.scope)
+    error.hidden = !openError
+    error.textContent = Fremkit.t(L.openError)
+    list.innerHTML = ''
+    if (!channel) { message.textContent = Fremkit.t(L.noConnection); return }
+    if (!snapshot) { message.textContent = Fremkit.t(L.loading); return }
+    if (snapshot.error) { message.textContent = Fremkit.t({
+      unauthorized: { fr: 'Jeton GitHub refusé.', en: 'GitHub token refused.' },
+      offline: { fr: 'GitHub est hors ligne.', en: 'GitHub is offline.' },
+      'rate-limited': { fr: 'Quota GitHub atteint.', en: 'GitHub rate limit reached.' },
+      unconfigured: { fr: 'Connexion GitHub incomplète.', en: 'GitHub connection is incomplete.' }
+    }[snapshot.error] || L.empty); return }
+    var rows = FremkitMyScope.recentRepos(snapshot, count)
+    message.textContent = rows.length ? '' : Fremkit.t(snapshot.errors && snapshot.errors.activity ? L.activityUnavailable : L.empty)
+    list.innerHTML = rows.map(function (row) {
+      return '<button type="button" class="row" data-repo="' + Fremkit.esc(row.repo) + '">' +
+        '<span class="body"><span class="repo">' + Fremkit.esc(row.repo) + '</span></span>' +
+        '<span class="when">' + Fremkit.esc(ago(row.updatedAt)) + '</span></button>'
+    }).join('')
+  }
+  function applySettings(settings) {
+    count = Number(settings.count) || 5
+    var next = settings.connection ? 'github:' + settings.connection : null
+    if (next !== channel) {
+      if (unsubscribe) { unsubscribe(); unsubscribe = null }
+      channel = next; snapshot = null
+      if (channel) unsubscribe = Fremkit.subscribe(channel, function (data) { snapshot = data; render() })
+    }
+    render()
+  }
+  Fremkit.whenReady(function () {
+    document.getElementById('list').addEventListener('click', function (event) {
+      var button = event.target && event.target.closest && event.target.closest('.row[data-repo]')
+      var repo = button && button.getAttribute('data-repo')
+      if (!repo || !channel) return
+      Promise.resolve(Fremkit.sendCommand(channel, 'openRepo', { repo: repo }))
+        .then(function (result) { openError = !result || !result.ok; render() })
+        .catch(function () { openError = true; render() })
+    })
+    document.documentElement.lang = Fremkit.locale
+    Fremkit.onLocale(function (locale) { document.documentElement.lang = locale; render() })
+    applySettings(Fremkit.settings || {})
+    Fremkit.onSettings(function (settings) { applySettings(settings || {}) })
+  })
+</script></body></html>

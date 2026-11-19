@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rectangle</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:var(--text,#e6e8eb);font-family:var(--font,-apple-system,system-ui,sans-serif)}
+    body{display:flex;flex-direction:column}
+    .grid{box-sizing:border-box;flex:1;min-height:0;padding:10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(56px,1fr);gap:8px}
+    button{min-width:0;border:0;border-radius:12px;background:var(--surface-3,#252a32);color:inherit;font:600 calc(15px * var(--text-scale,1)) var(--font,-apple-system,system-ui,sans-serif);padding:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;touch-action:manipulation}
+    button:active{background:var(--accent,#d9b36a);color:var(--on-accent,#0b0d10)}
+    button:disabled{opacity:.65;cursor:wait}
+    button.ok{outline:2px solid #3ddc84}
+    button.fail{outline:2px solid #ff6b6b}
+    .glyph{font-size:calc(clamp(21px,5vh,30px) * var(--text-scale,1));line-height:1}
+    .label{font-size:calc(clamp(11px,2.1vh,14px) * var(--text-scale,1));line-height:1.15;text-align:center}
+    .status{flex:0 0 auto;min-height:1.2em;margin:0 8px 7px;text-align:center;font-size:calc(11px * var(--text-scale,1));opacity:.75;pointer-events:none}
+    .target{display:flex;align-items:center;justify-content:center;gap:7px;min-height:28px;margin:4px 8px 0;font-size:calc(11px * var(--text-scale,1));opacity:.8}
+    .target-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+    html.on-light body{color:var(--on-surface,#0b0d10)}
+    html.on-light button{background:rgba(128,128,128,.2)}
+    html.accent-fill button{background:rgba(0,0,0,.18)}
+  </style>
+</head>
+<body>
+  <div class="target"><span id="target-label"></span><span id="target-name" class="target-name"></span></div>
+  <main class="grid" id="grid"></main>
+  <div class="status" id="status" aria-live="polite"></div>
+  <script>
+    var ACTIONS = [
+      { id: 'left-half', glyph: '◧', label: { fr: 'Moitié gauche', en: 'Left half' } },
+      { id: 'right-half', glyph: '◨', label: { fr: 'Moitié droite', en: 'Right half' } },
+      { id: 'fill', glyph: '▣', label: { fr: 'Remplir', en: 'Fill screen' } },
+      { id: 'next-display', glyph: '▣→', label: { fr: 'Écran suivant', en: 'Next display' } }
+    ]
+    var TEXT = {
+      selected: { fr: 'Fenêtre cible :', en: 'Target window:' },
+      noTarget: { fr: 'Activez une fenêtre pour la contrôler', en: 'Focus a window to control it' },
+      sent: { fr: 'Géométrie vérifiée par macOS.', en: 'macOS verified the window geometry.' },
+      unavailable: { fr: 'Action refusée ou indisponible.', en: 'Action was refused or is unavailable.' },
+      permission: { fr: 'Autorisez Fremkit dans Réglages Système > Confidentialité et sécurité > Accessibilité.', en: 'Allow Fremkit in System Settings > Privacy & Security > Accessibility.' },
+      noDisplay: { fr: 'Aucun autre écran n’est connecté.', en: 'No other display is connected.' },
+      targetChanged: { fr: 'La fenêtre cible a changé.', en: 'The target window changed.' }
+    }
+
+    Fremkit.whenReady(function () {
+      var grid = document.getElementById('grid')
+      var status = document.getElementById('status')
+      var targetLabel = document.getElementById('target-label')
+      var targetName = document.getElementById('target-name')
+      var targetToken = ''
+      var timer = 0
+      var pollTimer = 0
+
+      function setButtonsEnabled(enabled) {
+        grid.querySelectorAll('button').forEach(function (button) { button.disabled = !enabled })
+      }
+
+      function schedule(ms) {
+        clearTimeout(pollTimer)
+        pollTimer = setTimeout(poll, ms)
+      }
+
+      // The strip never takes focus, so the frontmost app is always the one the user is in —
+      // keep its inspected token current and the buttons arm themselves.
+      function poll() {
+        if (document.hidden) { schedule(3000); return }
+        Fremkit.sendCommand('rectangle', 'inspect-target', {}).then(function (result) {
+          if (result && result.ok === true && result.target && result.target.token) {
+            targetToken = result.target.token
+            targetLabel.textContent = Fremkit.t(TEXT.selected)
+            targetName.textContent = result.target.application
+            targetName.title = result.target.application
+            setButtonsEnabled(true)
+            schedule(1200)
+            return
+          }
+          targetToken = ''
+          targetLabel.textContent = Fremkit.t(TEXT.noTarget)
+          targetName.textContent = ''
+          setButtonsEnabled(false)
+          schedule(2000)
+        }).catch(function () {
+          targetToken = ''
+          setButtonsEnabled(false)
+          schedule(4000)
+        })
+      }
+
+      function flash(el, ok) {
+        el.classList.remove('ok', 'fail')
+        el.classList.add(ok ? 'ok' : 'fail')
+        setTimeout(function () { el.classList.remove('ok', 'fail') }, 900)
+      }
+
+      ACTIONS.forEach(function (action) {
+        var button = document.createElement('button')
+        button.type = 'button'
+        var glyph = document.createElement('span')
+        glyph.className = 'glyph'
+        glyph.textContent = action.glyph
+        var label = document.createElement('span')
+        label.className = 'label'
+        label.textContent = Fremkit.t(action.label)
+        button.appendChild(glyph)
+        button.appendChild(label)
+        button.title = label.textContent
+        button.addEventListener('click', function () {
+          if (button.disabled) return
+          button.disabled = true
+          status.textContent = ''
+          clearTimeout(timer)
+          Fremkit.sendCommand('rectangle', 'run', { action: action.id, targetToken: targetToken }).then(function (result) {
+            var ok = !!result && result.ok === true
+            flash(button, ok)
+            var message = ok ? TEXT.sent : result && result.error === 'accessibility-permission-required' ? TEXT.permission : result && result.error === 'no-next-display' ? TEXT.noDisplay : result && result.error === 'target-changed-or-unavailable' ? TEXT.targetChanged : TEXT.unavailable
+            status.textContent = Fremkit.t(message)
+            timer = setTimeout(function () { status.textContent = '' }, 1800)
+          }).catch(function () {
+            flash(button, false)
+            status.textContent = Fremkit.t(TEXT.unavailable)
+            timer = setTimeout(function () { status.textContent = '' }, 1800)
+          }).finally(function () { poll() })
+        })
+        grid.appendChild(button)
+      })
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) poll() })
+      poll()
+    })
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "id": "shellsmith-command",
+  "name": { "fr": "ShellSmith", "en": "ShellSmith" },
+  "version": "1.0.0",
+  "sdk": 1,
+  "author": "Livio Gama",
+  "license": "MIT",
+  "homepage": "https://github.com/LivioGama/fremkit-sietch",
+  "description": {
+    "fr": "Propose une commande shell à examiner et copier — elle n’est jamais exécutée par le widget.",
+    "en": "Suggests a shell command to review and copy — the widget never runs it."
+  },
+  "category": "dev",
+  "icon": "terminal",
+  "minSize": [8, 6],
+  "defaultSize": [12, 9],
+  "subscriptions": [],
+  "commands": ["openai-shellsmith:*"],
+  "settingsSchema": {
+    "connection": {
+      "type": "connection",
+      "connectionType": "openai-shellsmith",
+      "label": { "fr": "Connexion IA", "en": "AI connection" }
+    }
+  }
+}

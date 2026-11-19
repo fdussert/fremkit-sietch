@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>ShellSmith</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent;color:var(--text,#e6e8eb);font-family:var(--font,-apple-system,system-ui,sans-serif);overflow:hidden}
+  .wrap{box-sizing:border-box;height:100%;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+  .note,.status{font-size:calc(12px * var(--text-scale,1));line-height:1.4;color:var(--text-muted,#8b93a0)}
+  textarea{box-sizing:border-box;flex:1;min-height:64px;resize:none;border:1px solid var(--border,rgba(128,128,128,.3));border-radius:10px;padding:10px;background:var(--surface-2,rgba(128,128,128,.12));color:inherit;font:inherit}
+  textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent,#d9b36a);outline-offset:2px}
+  .actions{display:flex;align-items:center;gap:8px;flex:none}
+  button{min-height:42px;border:0;border-radius:10px;padding:8px 12px;background:var(--accent,#d9b36a);color:var(--surface,#101318);font:inherit;font-weight:600;cursor:pointer}
+  button.secondary{background:var(--surface-2,rgba(128,128,128,.2));color:inherit}
+  button:disabled{opacity:.55;cursor:wait}
+  pre{box-sizing:border-box;max-height:30%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;padding:9px 10px;border-radius:8px;background:var(--surface-2,rgba(128,128,128,.12));font:12px ui-monospace,SFMono-Regular,Menlo,monospace;user-select:text}
+  .status{min-height:1.3em}.status.error{color:var(--danger,#d9463f)}[hidden]{display:none!important}
+  html.on-light body{color:var(--on-surface,#0b0d10)}html.on-light .note,html.on-light .status{color:var(--on-surface,#0b0d10);opacity:.78}
+</style></head>
+<body><main class="wrap">
+  <div class="note" id="note"></div>
+  <textarea id="request" maxlength="1000" aria-label="Describe the command you need"></textarea>
+  <div class="actions"><button type="button" id="suggest"></button><button type="button" class="secondary" id="copy" hidden></button></div>
+  <pre id="result" hidden></pre>
+  <div class="status" id="status" aria-live="polite"></div>
+</main><script>
+  var L = {
+    note: { fr: 'Votre demande est envoyée au fournisseur IA configuré après clic. La commande proposée est du texte à vérifier : ce widget ne l’exécute jamais.', en: 'Your request is sent to the configured AI provider after you click. The suggestion is text to review: this widget never runs it.' },
+    placeholder: { fr: 'Décrivez la commande dont vous avez besoin…', en: 'Describe the command you need…' },
+    noConnection: { fr: 'Choisissez une connexion IA dans les paramètres.', en: 'Choose an AI connection in settings.' },
+    empty: { fr: 'Saisissez une demande.', en: 'Enter a request.' },
+    tooLong: { fr: 'Demande trop longue (1 000 caractères maximum).', en: 'Request is too long (1,000 characters maximum).' },
+    suggest: { fr: 'Proposer une commande', en: 'Suggest command' },
+    working: { fr: 'Réflexion…', en: 'Thinking…' },
+    copy: { fr: 'Copier le texte', en: 'Copy text' },
+    copied: { fr: 'Copié. Vérifiez la commande avant de l’utiliser.', en: 'Copied. Review the command before using it.' },
+    failed: { fr: 'Impossible de proposer une commande. Vérifiez la connexion.', en: 'Could not suggest a command. Check the connection.' },
+    copyFailed: { fr: 'Impossible de copier la commande.', en: 'Could not copy the command.' },
+    unauthorized: { fr: 'Clé API refusée.', en: 'API key refused.' },
+    rateLimited: { fr: 'Quota atteint ; réessayez plus tard.', en: 'Rate limit reached; try again later.' },
+    unavailable: { fr: 'Fournisseur IA injoignable.', en: 'AI provider unavailable.' },
+    unconfigured: { fr: 'Configurez un modèle et une clé API.', en: 'Configure a model and API key.' }
+  }
+  var channel = null, running = false, command = ''
+  function show(text, error) {
+    var status = document.getElementById('status')
+    status.textContent = text
+    status.className = 'status' + (error ? ' error' : '')
+  }
+  function applySettings(settings) {
+    channel = settings.connection ? 'openai-shellsmith:' + settings.connection : null
+    document.getElementById('note').textContent = Fremkit.t(L.note)
+    document.getElementById('request').placeholder = Fremkit.t(L.placeholder)
+    document.getElementById('suggest').textContent = Fremkit.t(L.suggest)
+    document.getElementById('copy').textContent = Fremkit.t(L.copy)
+    if (!channel) show(Fremkit.t(L.noConnection), true)
+  }
+  Fremkit.whenReady(function () {
+    var request = document.getElementById('request')
+    var suggest = document.getElementById('suggest')
+    var copy = document.getElementById('copy')
+    var result = document.getElementById('result')
+    suggest.addEventListener('click', function () {
+      if (running) return
+      if (!channel) { show(Fremkit.t(L.noConnection), true); return }
+      var text = request.value.trim()
+      if (!text) { show(Fremkit.t(L.empty), true); return }
+      if (text.length > 1000) { show(Fremkit.t(L.tooLong), true); return }
+      running = true
+      suggest.disabled = true
+      command = ''
+      copy.hidden = true
+      result.hidden = true
+      show(Fremkit.t(L.working), false)
+      Promise.resolve(Fremkit.sendCommand(channel, 'suggestCommand', { request: text }))
+        .then(function (response) {
+          if (response && response.ok && typeof response.command === 'string' && response.command.length > 0) {
+            command = response.command
+            result.textContent = command
+            result.hidden = false
+            copy.hidden = false
+            show('', false)
+            return
+          }
+          var key = response && response.error === 'unauthorized' ? 'unauthorized'
+            : response && response.error === 'rate-limited' ? 'rateLimited'
+              : response && response.error === 'unavailable' ? 'unavailable'
+                : response && response.error === 'unconfigured' ? 'unconfigured' : 'failed'
+          show(Fremkit.t(L[key]), true)
+        })
+        .catch(function () { show(Fremkit.t(L.failed), true) })
+        .finally(function () { running = false; suggest.disabled = false })
+    })
+    copy.addEventListener('click', function () {
+      if (!channel || !command || running) return
+      running = true
+      copy.disabled = true
+      Promise.resolve(Fremkit.sendCommand(channel, 'copyCommand', { command: command }))
+        .then(function (response) { show(response && response.ok ? Fremkit.t(L.copied) : Fremkit.t(L.copyFailed), !(response && response.ok)) })
+        .catch(function () { show(Fremkit.t(L.copyFailed), true) })
+        .finally(function () { running = false; copy.disabled = false })
+    })
+    document.documentElement.lang = Fremkit.locale
+    Fremkit.onLocale(function (locale) { document.documentElement.lang = locale; applySettings(Fremkit.settings || {}) })
+    Fremkit.onSettings(function (settings) { applySettings(settings || {}) })
+    applySettings(Fremkit.settings || {})
+  })
+</script></body></html>

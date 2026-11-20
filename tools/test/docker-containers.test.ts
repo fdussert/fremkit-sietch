@@ -14,7 +14,7 @@ interface Container {
   stats: { cpu: string; memory: string; netIO: string; blockIO: string } | null
 }
 interface Snapshot {
-  data: { containers: Container[] } | null
+  data: { containers: Container[]; actions?: string[] } | null
   stale: boolean
   error: string | null
 }
@@ -24,7 +24,14 @@ interface Node {
   hidden: boolean
   attributes: Record<string, string>
   setAttribute(name: string, value: string): void
-  addEventListener(type: string, callback: () => void): void
+  addEventListener(type: string, callback: (event?: unknown) => void): void
+}
+interface Sent {
+  channel: string
+  name: string
+  payload: unknown
+  resolve(result: unknown): void
+  reject(error: Error): void
 }
 
 function container(state: string, name = state, stats: Container['stats'] = null): Container {
@@ -33,10 +40,18 @@ function container(state: string, name = state, stats: Container['stats'] = null
 function snapshot(containers: Container[] = [], error: string | null = null): Snapshot {
   return { data: { containers }, stale: false, error }
 }
+/** What a Fremkit with the start, stop and restart commands publishes. */
+function acting(containers: Container[], actions = ['start', 'stop', 'restart']): Snapshot {
+  return { data: { containers, actions }, stale: false, error: null }
+}
+/** Lets a command's answer reach the widget. */
+const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 function load(initial?: Snapshot, locale = 'en') {
   const nodes = new Map<string, Node>()
-  const handlers = new Map<string, () => void>()
-  const timers: (() => void)[] = []
+  const handlers = new Map<string, (event?: unknown) => void>()
+  const timers: { id: number; ms: number; callback: () => void }[] = []
+  const sent: Sent[] = []
+  let nextTimer = 0
   let publish: ((data: Snapshot) => void) | undefined
   let changeLocale: (() => void) | undefined
   const get = (id: string): Node => {
@@ -69,18 +84,42 @@ function load(initial?: Snapshot, locale = 'en') {
       if (initial) callback(initial)
       return () => {}
     },
+    sendCommand(channel: string, name: string, payload: unknown) {
+      return new Promise((resolve, reject) => { sent.push({ channel, name, payload, resolve, reject }) })
+    },
   }
   runInNewContext(script, {
     Fremkit: api,
     document: { getElementById: get, documentElement: { lang: 'en' } },
-    setTimeout: (callback: () => void) => { timers.push(callback) },
+    setTimeout: (callback: () => void, ms = 0) => { timers.push({ id: ++nextTimer, ms, callback }); return nextTimer },
+    clearTimeout: (id: number) => { const at = timers.findIndex((timer) => timer.id === id); if (at !== -1) timers.splice(at, 1) },
   })
   return {
     get,
+    sent,
+    /**
+     * A tap on a container's card, or on one of its buttons. Refused when the list does not show
+     * that card as one to tap, or that button: a test cannot press what a finger could not.
+     */
+    tap(id: string, action?: string) {
+      const list = get('list').innerHTML
+      if (!list.includes(`data-id="${id}"`)) throw new Error(`no card to tap for ${id}`)
+      if (action && !list.includes(`data-act="${action}"`)) throw new Error(`no ${action} button`)
+      handlers.get('list:click')?.({ target: { closest: (selector: string) => selector.startsWith('button')
+        ? (action ? { getAttribute: () => action } : null)
+        : { getAttribute: () => id } } })
+    },
+    /** Runs the pending timers set for `ms`, as that much time passing would. */
+    after(ms: number) {
+      for (const timer of timers.filter((candidate) => candidate.ms === ms)) {
+        timers.splice(timers.indexOf(timer), 1)
+        timer.callback()
+      }
+    },
     update(data: Snapshot) { publish?.(data) },
     filter(id: 'active' | 'stopped' | 'all') { handlers.get('filter-' + id + ':click')?.() },
     language(value: 'en' | 'fr') { api.locale = value; changeLocale?.() },
-    runTimeout() { timers.shift()?.() },
+    runTimeout() { timers.shift()?.callback() },
     text() { return [...nodes.values()].filter((node) => !node.hidden).map((node) => node.textContent + node.innerHTML).join(' ') },
   }
 }
@@ -179,6 +218,149 @@ describe('Docker containers widget', () => {
     expect(html).toContain('html.accent-fill .filters button[aria-pressed="true"]')
     expect(manifest.defaultSize).toEqual([32, 8])
     expect(manifest.subscriptions).toEqual(['docker-local'])
-    expect(manifest.commands).toEqual([])
+    expect(manifest.commands).toEqual(['docker-local'])
+  })
+})
+
+describe('Docker containers widget actions', () => {
+  it('stays read-only on a host that publishes no actions', () => {
+    const widget = load(snapshot([container('running'), container('exited')]))
+    widget.filter('all')
+    expect(widget.get('list').innerHTML).not.toContain('data-id')
+    expect(widget.get('list').innerHTML).not.toContain('role="button"')
+    expect(() => widget.tap('running')).toThrow('no card to tap')
+    expect(widget.sent).toEqual([])
+  })
+
+  it('unfolds a card with the actions its state allows', () => {
+    const widget = load(acting([container('running'), container('paused'), container('exited'), container('removing')]))
+    widget.filter('all')
+    expect(widget.get('list').innerHTML).toContain('aria-expanded="false"')
+    expect(widget.get('list').innerHTML).not.toContain('data-act')
+    widget.tap('running')
+    const open = widget.get('list').innerHTML
+    expect(open).toContain('data-act="stop"')
+    expect(open).toContain('data-act="restart"')
+    expect(open).not.toContain('data-act="start"')
+    widget.tap('paused')
+    expect(widget.get('list').innerHTML).toContain('data-act="stop"')
+    widget.tap('exited')
+    const stopped = widget.get('list').innerHTML
+    expect(stopped).toContain('data-act="start"')
+    expect(stopped).not.toContain('data-act="stop"')
+    // One card at a time, and none for a container in a state nothing applies to.
+    expect(stopped.match(/class="card actionable open"/g)).toHaveLength(1)
+    expect(() => widget.tap('removing')).toThrow('no card to tap')
+    widget.tap('exited')
+    expect(widget.get('list').innerHTML).not.toContain('data-act')
+  })
+
+  it('offers only the actions the host takes', () => {
+    const widget = load(acting([container('running'), container('exited')], ['start']))
+    widget.filter('all')
+    expect(() => widget.tap('running')).toThrow('no card to tap')
+    widget.tap('exited')
+    expect(widget.get('list').innerHTML).toContain('data-act="start"')
+  })
+
+  it('starts at once', () => {
+    const widget = load(acting([container('exited')]))
+    widget.filter('stopped')
+    widget.tap('exited')
+    widget.tap('exited', 'start')
+    expect(widget.sent.map(({ channel, name, payload }) => ({ channel, name, payload })))
+      .toEqual([{ channel: 'docker-local', name: 'start', payload: { id: 'exited' } }])
+    expect(widget.get('list').innerHTML).toContain('Starting…')
+  })
+
+  it.each(['stop', 'restart'])('asks before a %s, and sends it on the second tap', (action) => {
+    const widget = load(acting([container('running')]))
+    widget.tap('running')
+    widget.tap('running', action)
+    expect(widget.sent).toEqual([])
+    expect(widget.get('list').innerHTML).toContain(`data-act="${action}" class="confirm">Confirm?`)
+    widget.tap('running', action)
+    expect(widget.sent.map(({ name, payload }) => ({ name, payload }))).toEqual([{ name: action, payload: { id: 'running' } }])
+  })
+
+  it('does not take a tap on Restart for the answer to Stop, and lets the question lapse', () => {
+    const widget = load(acting([container('running')]))
+    widget.tap('running')
+    widget.tap('running', 'stop')
+    widget.tap('running', 'restart')
+    expect(widget.sent).toEqual([])
+    expect(widget.get('list').innerHTML).toContain('data-act="restart" class="confirm"')
+    expect(widget.get('list').innerHTML).toContain('data-act="stop">Stop')
+    widget.after(4000)
+    expect(widget.get('list').innerHTML).not.toContain('class="confirm"')
+    widget.tap('running', 'restart')
+    expect(widget.sent).toEqual([])
+  })
+
+  it('shows the action under way, takes no other meanwhile, and folds the card once it is done', async () => {
+    const widget = load(acting([container('running')]), 'fr')
+    widget.tap('running')
+    widget.tap('running', 'stop')
+    widget.tap('running', 'stop')
+    expect(widget.get('list').innerHTML).toContain('Arrêt…')
+    expect(widget.get('list').innerHTML).not.toContain('data-act')
+    widget.tap('running')
+    widget.after(10000)
+    expect(widget.get('list').innerHTML).toContain('Arrêt…')
+    widget.sent[0].resolve({ ok: true })
+    await settled()
+    expect(widget.get('list').innerHTML).toContain('aria-expanded="false"')
+    expect(widget.get('list').innerHTML).not.toContain('Arrêt…')
+    expect(widget.sent).toHaveLength(1)
+  })
+
+  it.each([
+    [{ ok: false, error: 'busy' }, 'Une action est déjà en cours'],
+    [{ ok: false, error: 'unknown-container' }, 'Conteneur introuvable'],
+    [{ ok: false, error: 'remote-context' }, 'Contexte Docker distant'],
+    [{ ok: false, error: 'failed' }, 'L’action a échoué'],
+    [{ ok: false, error: '<b>new</b>' }, 'L’action a échoué'],
+    [null, 'L’action a échoué'],
+  ])('says why %j was refused, then offers the buttons again', async (answer, message) => {
+    const widget = load(acting([container('exited')]), 'fr')
+    widget.filter('stopped')
+    widget.tap('exited')
+    widget.tap('exited', 'start')
+    widget.sent[0].resolve(answer)
+    await settled()
+    expect(widget.get('list').innerHTML).toContain(message)
+    expect(widget.get('list').innerHTML).not.toContain('<b>new</b>')
+    widget.after(4000)
+    expect(widget.get('list').innerHTML).toContain('data-act="start"')
+  })
+
+  it('treats a command the host refused outright as a failure, not as a broken tile', async () => {
+    const widget = load(acting([container('exited')]))
+    widget.filter('stopped')
+    widget.tap('exited')
+    widget.tap('exited', 'start')
+    widget.sent[0].reject(new Error('commande inconnue: docker-local.start'))
+    await settled()
+    expect(widget.get('list').innerHTML).toContain('The action failed')
+    expect(widget.get('list').innerHTML).not.toContain('commande inconnue')
+  })
+
+  it('folds an open card back after ten seconds, and when its container leaves the list', () => {
+    const widget = load(acting([container('running')]))
+    widget.tap('running')
+    widget.after(10000)
+    expect(widget.get('list').innerHTML).not.toContain('data-act')
+    widget.tap('running')
+    widget.update(acting([container('exited')]))
+    widget.update(acting([container('running')]))
+    expect(widget.get('list').innerHTML).not.toContain('data-act')
+  })
+
+  it('escapes a container id where it is written into the page', () => {
+    const odd = container('running')
+    odd.id = '"><img src=x>'
+    const widget = load(acting([odd]))
+    expect(widget.get('list').innerHTML).toContain('data-id="&quot;&gt;&lt;img src=x&gt;"')
+    expect(widget.get('list').innerHTML).not.toContain('<img')
   })
 })

@@ -75,12 +75,54 @@
   .metric svg { width: 16px; height: 16px; flex: none; color: var(--accent, currentColor); }
   .metric.memory svg { color: var(--text-muted, currentColor); }
   .io { color: var(--text-muted, currentColor); font-size: calc(11px * var(--text-scale, 1)); }
+  /* A card that can be acted on unfolds on a tap: its name, its state and one button per action. */
+  .card.actionable { cursor: pointer; }
+  .card.actionable:focus-visible { outline: 3px solid var(--accent, currentColor); outline-offset: 2px; }
+  .card.open { border-color: var(--accent, currentColor); }
+  .head { display: flex; align-items: center; gap: 8px; }
+  .head .name { flex: 1; min-width: 0; }
+  .head .pill { flex: none; max-width: 50%; margin: 0; }
+  .actions { display: flex; gap: 6px; margin-top: 6px; }
+  .actions button {
+    flex: 1;
+    min-width: 0;
+    min-height: 56px;
+    padding: 4px 8px;
+    border: 1px solid var(--border, currentColor);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: calc(14px * var(--text-scale, 1));
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .actions button:focus-visible { outline: 3px solid var(--accent, currentColor); outline-offset: 2px; }
+  .actions button.confirm { background: var(--danger, #e5484d); border-color: var(--danger, #e5484d); color: #fff; }
+  .note {
+    flex: 1;
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: calc(13px * var(--text-scale, 1));
+    color: var(--text-muted, currentColor);
+  }
+  .note.failed { color: var(--danger, currentColor); }
   html.on-light .filters button[aria-pressed="true"] {
     background: rgba(128, 128, 128, .2);
     color: var(--on-surface, #0b0d10);
   }
   html.accent-fill .summary, html.accent-fill .meta, html.accent-fill .io,
-  html.accent-fill .pill, html.accent-fill .metric svg { color: var(--on-surface); }
+  html.accent-fill .pill, html.accent-fill .metric svg,
+  html.accent-fill .note, html.accent-fill .note.failed { color: var(--on-surface); }
+  html.accent-fill .card.open { border-color: var(--on-surface); }
+  html.accent-fill .actions button.confirm {
+    background: var(--on-surface);
+    border-color: var(--on-surface);
+    color: var(--accent);
+  }
   html.accent-fill .filters button[aria-pressed="true"] {
     background: var(--on-surface);
     color: var(--accent);
@@ -140,11 +182,36 @@
     statePaused: { fr: 'En pause', en: 'Paused' },
     stateRestarting: { fr: 'Redémarrage', en: 'Restarting' },
     stateRemoving: { fr: 'Suppression', en: 'Removing' },
-    stateUnknown: { fr: 'État inconnu', en: 'Unknown state' }
+    stateUnknown: { fr: 'État inconnu', en: 'Unknown state' },
+    start: { fr: 'Démarrer', en: 'Start' },
+    stop: { fr: 'Arrêter', en: 'Stop' },
+    restart: { fr: 'Redémarrer', en: 'Restart' },
+    confirm: { fr: 'Confirmer ?', en: 'Confirm?' },
+    startPending: { fr: 'Démarrage…', en: 'Starting…' },
+    stopPending: { fr: 'Arrêt…', en: 'Stopping…' },
+    restartPending: { fr: 'Redémarrage…', en: 'Restarting…' },
+    errBusy: { fr: 'Une action est déjà en cours', en: 'An action is already running' },
+    errUnknown: { fr: 'Conteneur introuvable', en: 'Container not found' },
+    errLocal: { fr: 'Réservé à ce Mac et aux appareils appairés', en: 'Only from this Mac or a paired device' },
+    errFailed: { fr: 'L’action a échoué', en: 'The action failed' }
   }
+  var ERRORS = {
+    'busy': 'errBusy', 'unknown-container': 'errUnknown', 'local-only': 'errLocal',
+    'remote-context': 'remote', 'unavailable': 'unavailable'
+  }
+  var CONFIRM_MS = 4000
+  var FOLD_MS = 10000
+  var FAILURE_MS = 4000
   var snapshot = null
   var filter = 'active'
   var olderHost = false
+  var open = null          // id of the unfolded card
+  var confirming = null    // the action of the unfolded card waiting for its second tap
+  var pending = {}         // id -> the action under way
+  var failure = null       // { id, key }: the last refusal, shown on its card for a moment
+  var foldTimer = null
+  var confirmTimer = null
+  var failureTimer = null
 
   function t(key, params) { return Fremkit.t(L[key], params) }
   function esc(value) { return Fremkit.esc(value == null ? '' : value) }
@@ -172,13 +239,43 @@
       + '" aria-label="' + esc(label + ' : ' + value) + '"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
       + path + '</svg><span>' + esc(value) + '</span></span>'
   }
+  // What this host can do to a container in that state. A Fremkit older than the commands
+  // publishes no `actions`: no card unfolds there and the widget stays read-only.
+  function actionsFor(container) {
+    var offered = snapshot && snapshot.data && Array.isArray(snapshot.data.actions) ? snapshot.data.actions : []
+    var wanted = container.state === 'running' || container.state === 'paused' || container.state === 'restarting'
+      ? ['stop', 'restart'] : isStopped(container) ? ['start'] : []
+    return wanted.filter(function (action) { return offered.indexOf(action) !== -1 })
+  }
+  function unfolded(container, actions, state, stateClass) {
+    var html = '<div class="card actionable open" role="group" aria-label="' + esc(container.name)
+      + '" data-id="' + esc(container.id) + '"><div class="head"><div class="name">' + esc(container.name)
+      + '</div><div class="pill ' + stateClass + '">' + esc(state) + '</div></div><div class="actions">'
+    if (pending[container.id]) {
+      html += '<div class="note" role="status">' + esc(t(pending[container.id] + 'Pending')) + '</div>'
+    } else if (failure && failure.id === container.id) {
+      html += '<div class="note failed" role="alert">' + esc(t(failure.key)) + '</div>'
+    } else {
+      html += actions.map(function (action) {
+        var asked = confirming === action
+        return '<button type="button" data-act="' + action + '"' + (asked ? ' class="confirm"' : '') + '>'
+          + esc(asked ? t('confirm') : t(action)) + '</button>'
+      }).join('')
+    }
+    return html + '</div></div>'
+  }
   function card(container) {
     var stats = container.stats
     var state = stateLabel(container.state)
     var stateClass = container.state === 'running' ? 'running' : 'stopped'
+    var actions = actionsFor(container)
+    if (open === container.id && (actions.length || pending[container.id])) return unfolded(container, actions, state, stateClass)
     var status = String(container.status || '').trim()
     var detail = status.toLowerCase() === container.state.toLowerCase() ? '' : ' · ' + esc(status)
-    var html = '<div class="card"><div class="name">' + esc(container.name)
+    var html = (actions.length
+      ? '<div class="card actionable" role="button" tabindex="0" aria-expanded="false" data-id="' + esc(container.id) + '">'
+      : '<div class="card">')
+      + '<div class="name">' + esc(container.name)
       + '</div><div class="meta">' + esc(container.image)
       + '</div><div class="pill ' + stateClass + '">' + esc(state) + detail
       + '</div><div class="metrics">' + metric('cpu', stats ? stats.cpu : '?')
@@ -207,13 +304,80 @@
       byId('filter-' + key).setAttribute('aria-pressed', String(filter === key))
     }
     var visible = filter === 'active' ? running : filter === 'stopped' ? stopped : rows
+    // The unfolded container left the list (stopped under "Running", removed): nothing stays open.
+    if (open && !pending[open] && !visible.some(function (container) { return container.id === open })) {
+      open = null
+      confirming = null
+    }
     byId('empty').hidden = !snapshot || !snapshot.data || visible.length > 0
     byId('empty').textContent = t(filter === 'active' ? 'emptyActive' : filter === 'stopped' ? 'emptyStopped' : 'emptyAll')
     byId('list').innerHTML = visible.slice().sort(function (a, b) {
       return (b.state === 'running') - (a.state === 'running') || a.name.localeCompare(b.name)
     }).map(card).join('')
   }
+  // The unfolded card folds back by itself: a Stop button is not left waiting on a touch screen.
+  function arm() {
+    clearTimeout(foldTimer)
+    if (!open) return
+    foldTimer = setTimeout(function () {
+      if (pending[open]) { arm(); return }
+      open = null
+      confirming = null
+      render()
+    }, FOLD_MS)
+  }
+  function toggle(id) {
+    if (pending[id]) return
+    open = open === id ? null : id
+    confirming = null
+    failure = null
+    clearTimeout(confirmTimer)
+    arm()
+    render()
+  }
+  function fail(id, code) {
+    failure = { id: id, key: ERRORS[code] || 'errFailed' }
+    clearTimeout(failureTimer)
+    failureTimer = setTimeout(function () { failure = null; render() }, FAILURE_MS)
+  }
+  // Start goes at once. Stop and Restart take a second tap on the same button, within a few seconds.
+  function press(id, action) {
+    if (pending[id]) return
+    arm()
+    if (action !== 'start' && confirming !== action) {
+      confirming = action
+      clearTimeout(confirmTimer)
+      confirmTimer = setTimeout(function () { confirming = null; render() }, CONFIRM_MS)
+      render()
+      return
+    }
+    confirming = null
+    clearTimeout(confirmTimer)
+    pending[id] = action
+    render()
+    Fremkit.sendCommand('docker-local', action, { id: id }).then(function (result) {
+      delete pending[id]
+      if (result && result.ok) { if (open === id) open = null } else fail(id, result && result.error)
+    }, function () {
+      // The host refused the command itself: not granted, or the page lost its server.
+      delete pending[id]
+      fail(id)
+    }).then(function () { arm(); render() })
+  }
   Fremkit.whenReady(function () {
+    byId('list').addEventListener('click', function (event) {
+      var cardEl = event.target.closest('.card[data-id]')
+      if (!cardEl) return
+      var button = event.target.closest('button[data-act]')
+      if (button) press(cardEl.getAttribute('data-id'), button.getAttribute('data-act'))
+      else toggle(cardEl.getAttribute('data-id'))
+    })
+    byId('list').addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && open) { toggle(open); return }
+      if ((event.key !== 'Enter' && event.key !== ' ') || !event.target.matches('.card[data-id]')) return
+      event.preventDefault()
+      toggle(event.target.getAttribute('data-id'))
+    })
     for (var key of ['active', 'stopped', 'all']) {
       (function (selected) {
         byId('filter-' + selected).addEventListener('click', function () { filter = selected; render() })

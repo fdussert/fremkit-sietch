@@ -1,3 +1,8 @@
+## 1.1.0 — 2026-11-20
+
+### Added
+- Start, stop and restart a container. Tap its card: it unfolds with Stop and Restart for a running container, Start for a stopped one. Stop and Restart take a second tap to confirm; the card folds back after ten seconds. Nothing can be removed or killed from the widget. The update asks you to accept the new permission, sending commands to Docker. Needs a Fremkit newer than 0.5.2: on an older one the cards do not unfold and the widget stays read-only.
+
 ## 1.0.2 — 2026-10-18
 
 ### Added
